@@ -11,16 +11,16 @@
 
 # Pre-Flight
 
-- [ ] Node+tsx runtime available (`node --import tsx/esm -e ""`)
-- [ ] Baseline test suite passes (`npm test`)
-- [ ] Working tree clean before first dispatch
-- [ ] No external credentials/services required for this plan
+- [x] Node+tsx runtime available (`node --import tsx/esm -e ""`) — 2026-02-26T19:30:14Z
+- [x] Baseline test suite passes (`npm test`) — 2026-02-26T19:30:14Z
+- [x] Working tree clean before first dispatch — 2026-02-26T19:30:14Z
+- [x] No external credentials/services required for this plan — 2026-02-26T19:30:14Z
 
 # Probe
 
-- [ ] Attempt: `try-01`
-  - Probe result: `PENDING`
-  - Action: `pending`
+- [x] Attempt: `try-01`
+  - Probe result: `PASS`
+  - Action: `dispatch real chain`
 
 # Memory
 

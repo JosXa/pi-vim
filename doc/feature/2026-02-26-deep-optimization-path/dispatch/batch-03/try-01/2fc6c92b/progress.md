@@ -9,3 +9,5 @@
 - [x] Produce T7 final report + benchmark artifacts.
 - [x] Commit logical groups with gitmoji subjects.
 - [x] Write final implementer report.
+- [x] Perform strict spec review and write `spec-review.md`.
+- [x] Perform focused quality review and write `quality-review.md`.
