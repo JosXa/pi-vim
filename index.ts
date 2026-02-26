@@ -77,6 +77,7 @@ import {
 import {
   reverseCharMotion,
   findCharMotionTarget,
+  findWordMotionTarget,
 } from "./motions.js";
 
 const BRACKETED_PASTE_START = "\x1b[200~";
@@ -575,7 +576,37 @@ export class ModalEditor extends CustomEditor {
     return i;
   }
 
+  private tryMoveWordLineLocal(
+    direction: "forward" | "backward",
+    target: "start" | "end",
+  ): boolean {
+    const cursor = this.getCursor();
+    const line = this.getLines()[cursor.line] ?? "";
+    const col = cursor.col;
+
+    if (line.length === 0) return false;
+
+    if (direction === "forward") {
+      if (col >= line.length) return false;
+      const targetCol = findWordMotionTarget(line, col, direction, target);
+      if (targetCol <= col || targetCol >= line.length) return false;
+      this.moveCursorBy(targetCol - col);
+      return true;
+    }
+
+    if (col <= 0) return false;
+    if (!/\S/.test(line.slice(0, col))) return false;
+
+    const targetCol = findWordMotionTarget(line, col, direction, target);
+    if (targetCol >= col) return false;
+
+    this.moveCursorBy(targetCol - col);
+    return true;
+  }
+
   private moveWord(direction: "forward" | "backward", target: "start" | "end"): void {
+    if (this.tryMoveWordLineLocal(direction, target)) return;
+
     const text = this.getText();
     const currentAbs = this.getAbsoluteIndexFromCursor();
     const targetAbs = this.findWordTargetInText(text, currentAbs, direction, target);

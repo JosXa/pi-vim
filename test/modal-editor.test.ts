@@ -376,6 +376,112 @@ describe("EOL and newline semantics", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Word motion path selection (line-local fast path vs canonical fallback)
+// ---------------------------------------------------------------------------
+
+describe("word motion path selection", () => {
+  it("line-local w avoids canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["w"]);
+    assert.equal(calls, 0);
+  });
+
+  it("line-local e avoids canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["e"]);
+    assert.equal(calls, 0);
+  });
+
+  it("line-local b avoids canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+    sendKeys(editor, ["w"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["b"]);
+    assert.equal(calls, 0);
+  });
+
+  it("w at EOL falls back to canonical absolute scanner", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    sendKeys(editor, ["$"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["w"]);
+    assert.ok(calls > 0);
+  });
+
+  it("e at EOL falls back to canonical absolute scanner", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    sendKeys(editor, ["$"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["e"]);
+    assert.ok(calls > 0);
+  });
+
+  it("b from BOL falls back to canonical absolute scanner", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    sendKeys(editor, ["j", "0"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["b"]);
+    assert.ok(calls > 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cross-line word motions (w / e / b and operator forms)
 // ---------------------------------------------------------------------------
 
