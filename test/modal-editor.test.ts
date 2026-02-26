@@ -48,6 +48,61 @@ function chkMode(
   assert.equal(editor.getMode(), expectedMode, `mode after [${keys.join("")}]`);
 }
 
+function makeGeneratedLineFixtures(count: number): string[] {
+  let seed = 0x51f15eed;
+  const next = (): number => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed;
+  };
+
+  const words = ["alpha", "beta_2", "GAMMA", "z9", "m_n"];
+  const punct = ["-", "--", "::", ".", ",", "!?", "#"];
+  const spaces = [" ", "  ", "   ", "\t"];
+  const fixtures = ["", "   ", "---", "a", "a   b", "foo--bar"];
+
+  for (let i = 0; i < count; i++) {
+    const parts: string[] = [];
+    const partCount = 1 + (next() % 6);
+
+    for (let part = 0; part < partCount; part++) {
+      const bucket = next() % 5;
+      if (bucket <= 1) {
+        parts.push(words[next() % words.length]!);
+      } else if (bucket === 2) {
+        parts.push(punct[next() % punct.length]!);
+      } else {
+        parts.push(spaces[next() % spaces.length]!);
+      }
+    }
+
+    fixtures.push(parts.join(""));
+  }
+
+  return fixtures;
+}
+
+function runScenario(
+  initial: string,
+  keys: string[],
+  mode: "fast" | "canonical",
+): { text: string; register: string; editorMode: "normal" | "insert" } {
+  const { editor } = initial.includes("\n")
+    ? createMultiLineEditor(initial)
+    : createEditorWithSpy(initial);
+
+  if (mode === "canonical") {
+    (editor as any).tryFindWordTargetLineLocal = () => null;
+  }
+
+  sendKeys(editor, keys);
+
+  return {
+    text: editor.getText(),
+    register: editor.getRegister(),
+    editorMode: editor.getMode(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Mode transitions
 // ---------------------------------------------------------------------------
@@ -557,6 +612,72 @@ describe("operator word-motion path selection", () => {
       sendKeys(editor, scenario.keys);
       assert.ok(calls > 0, `${scenario.name} should fall back`);
     }
+  });
+});
+
+describe("word-motion fast path differential", () => {
+  const assertFastEqualsCanonical = (initial: string, keys: string[], label: string): void => {
+    const fast = runScenario(initial, keys, "fast");
+    const canonical = runScenario(initial, keys, "canonical");
+    assert.deepEqual(fast, canonical, label);
+  };
+
+  it("matches canonical behavior on generated line fixtures", () => {
+    const fixtures = makeGeneratedLineFixtures(80);
+    const scenarios: Array<{ name: string; keys: string[] }> = [
+      { name: "w+x", keys: ["w", "x"] },
+      { name: "e+x", keys: ["e", "x"] },
+      { name: "w,b,x", keys: ["w", "b", "x"] },
+      { name: "dw", keys: ["d", "w"] },
+      { name: "de", keys: ["d", "e"] },
+      { name: "w,db", keys: ["w", "d", "b"] },
+      { name: "cw", keys: ["c", "w"] },
+      { name: "ce", keys: ["c", "e"] },
+      { name: "w,cb", keys: ["w", "c", "b"] },
+      { name: "yw", keys: ["y", "w"] },
+      { name: "ye", keys: ["y", "e"] },
+      { name: "w,yb", keys: ["w", "y", "b"] },
+    ];
+
+    for (const line of fixtures) {
+      for (const scenario of scenarios) {
+        assertFastEqualsCanonical(
+          line,
+          scenario.keys,
+          `line=${JSON.stringify(line)} scenario=${scenario.name}`,
+        );
+      }
+    }
+  });
+});
+
+describe("word-motion guard boundary regressions", () => {
+  const assertFastEqualsCanonical = (initial: string, keys: string[], label: string): void => {
+    const fast = runScenario(initial, keys, "fast");
+    const canonical = runScenario(initial, keys, "canonical");
+    assert.deepEqual(fast, canonical, label);
+  };
+
+  it("matches canonical behavior at EOL/BOL + punctuation/whitespace/empty boundaries", () => {
+    const cases: Array<{ label: string; initial: string; keys: string[] }> = [
+      { label: "EOL cross-line dw", initial: "foo\nbar", keys: ["$", "d", "w"] },
+      { label: "BOL cross-line yb", initial: "foo\nbar", keys: ["j", "0", "y", "b"] },
+      { label: "punctuation run", initial: "foo---bar", keys: ["w", "x"] },
+      { label: "whitespace run", initial: "foo     bar", keys: ["w", "x"] },
+      { label: "empty line", initial: "", keys: ["w", "d", "w"] },
+    ];
+
+    for (const testCase of cases) {
+      assertFastEqualsCanonical(testCase.initial, testCase.keys, testCase.label);
+    }
+  });
+
+  it("keeps insert-mode behavior unaffected", () => {
+    assertFastEqualsCanonical("hello", ["i", "X", "Y", "\x1b", "x"], "insert mode");
+  });
+
+  it("keeps non-word command behavior unaffected", () => {
+    assertFastEqualsCanonical("foo", ["x", "P", "f", "o", "x"], "non-word commands");
   });
 });
 
