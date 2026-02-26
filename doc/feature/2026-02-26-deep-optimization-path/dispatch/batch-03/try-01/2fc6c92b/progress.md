@@ -7,5 +7,5 @@
 - [x] Keep only favorable trade-off code changes (attempt #3 only).
 - [x] Execute required gates (`npm test`, final perf bench command).
 - [x] Produce T7 final report + benchmark artifacts.
-- [ ] Commit logical groups with gitmoji subjects.
-- [ ] Write final implementer report.
+- [x] Commit logical groups with gitmoji subjects.
+- [x] Write final implementer report.
