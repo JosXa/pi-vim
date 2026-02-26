@@ -86,7 +86,7 @@ export class ModalEditor extends CustomEditor {
   private pendingOperator: PendingOperator = null;
   private lastCharMotion: LastCharMotion | null = null;
 
-  // Unnamed register (task 3)
+  // Unnamed register
   private unnamedRegister: string = "";
   private clipboardFn: (text: string) => void = (text: string) => {
     try { copyToClipboard(text); } catch { /* best effort */ }
@@ -167,13 +167,22 @@ export class ModalEditor extends CustomEditor {
     }
   }
 
+  private isPrintableChunk(data: string): boolean {
+    if (data.length === 0) return false;
+    for (const char of data) {
+      const codePoint = char.codePointAt(0)!;
+      if (codePoint < 32 || codePoint === 127) return false;
+    }
+    return true;
+  }
+
   private isPrintableInput(data: string): boolean {
-    return data.length === 1 && data.charCodeAt(0) >= 32;
+    return this.isPrintableChunk(data) && Array.from(data).length === 1;
   }
 
   private cancelPendingOperator(data: string): void {
     this.pendingOperator = null;
-    if (!this.isPrintableInput(data)) {
+    if (!this.isPrintableChunk(data)) {
       super.handleInput(data);
     }
   }
@@ -340,12 +349,12 @@ export class ModalEditor extends CustomEditor {
     if (data === "b") return this.moveWord("backward", "start");
     if (data === "e") return this.moveWord("forward", "end");
 
-    if (data in NORMAL_KEYS) {
+    if (Object.hasOwn(NORMAL_KEYS, data)) {
       return this.handleMappedKey(data);
     }
 
     // Pass control sequences (ctrl+c, etc.) to super, ignore printable chars
-    if (data.length === 1 && data.charCodeAt(0) >= 32) return;
+    if (this.isPrintableChunk(data)) return;
     super.handleInput(data);
   }
 

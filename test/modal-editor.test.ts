@@ -79,6 +79,28 @@ describe("mode transitions", () => {
     assert.equal(editor.getText(), "fooX\nbar");
     assert.equal(editor.getMode(), "insert");
   });
+
+  it("normal mode ignores printable unicode input", () => {
+    const { editor } = createEditorWithSpy("abc");
+    sendKeys(editor, ["😀"]);
+    assert.equal(editor.getText(), "abc");
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("normal mode ignores pasted printable chunks", () => {
+    const { editor } = createEditorWithSpy("abc");
+    sendKeys(editor, ["xyz"]);
+    assert.equal(editor.getText(), "abc");
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("normal mode does not treat prototype keys as mappings", () => {
+    const { editor } = createEditorWithSpy("abc");
+
+    assert.doesNotThrow(() => sendKeys(editor, ["toString"]));
+    assert.equal(editor.getText(), "abc");
+    assert.equal(editor.getMode(), "normal");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -669,6 +691,17 @@ describe("operator cancellation", () => {
     sendKeys(editor, ["c", "z", "w"]);
     assert.equal(editor.getText(), before);
     assert.equal(editor.getMode(), "normal");
+  });
+
+  it("printable chunk cancels df target wait without insertion", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    // After d f, pasted printable chunks should cancel the wait and be ignored.
+    // If operator stays sticky or text is inserted, final state differs.
+    sendKeys(editor, ["d", "f", "ab", "w", "x"]);
+
+    assert.equal(editor.getText(), "foo ar");
+    assert.equal(editor.getRegister(), "b");
   });
 
   it("non-printable input cancels df target wait without stickiness", () => {
