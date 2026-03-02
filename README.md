@@ -58,6 +58,8 @@ Insert-mode shortcuts (stay in Insert mode):
 | `k`   | Up                      |
 | `0`   | Line start              |
 | `$`   | Line end                |
+| `gg`  | Buffer start (line 1)   |
+| `G`   | Buffer end (last line)  |
 | `w`   | Next word start         |
 | `b`   | Previous word start     |
 | `e`   | Word end (inclusive)    |
@@ -88,18 +90,22 @@ All operators write to the unnamed register and mirror to the system clipboard
 
 | Command    | Deletes                                     |
 |------------|---------------------------------------------|
-| `dw`       | Forward to next word start (exclusive, can cross lines) |
-| `de`       | Forward to word end (inclusive, can cross lines)        |
-| `db`       | Backward to word start (exclusive, can cross lines)     |
-| `d$`       | To end of line                              |
-| `d0`       | To start of line                            |
-| `dd`       | Whole line content                          |
-| `df{char}` | To and including `char`                     |
-| `dt{char}` | Up to (not including) `char`                |
-| `dF{char}` | Backward to and including `char`            |
-| `dT{char}` | Backward to one after `char`                |
-| `diw`      | Inner word                                  |
-| `daw`      | Around word (includes surrounding spaces)   |
+| `dw`         | Forward to next word start (exclusive, can cross lines) |
+| `de`         | Forward to word end (inclusive, can cross lines)        |
+| `db`         | Backward to word start (exclusive, can cross lines)     |
+| `d$`         | To end of line                                          |
+| `d0`         | To start of line                                        |
+| `dd`         | Current line (linewise)                                 |
+| `{count}dd`  | `{count}` lines (linewise)                              |
+| `d{count}j`  | Current line + `{count}` lines below (linewise)         |
+| `d{count}k`  | Current line + `{count}` lines above (linewise)         |
+| `dG`         | Current line to end of buffer (linewise)                |
+| `df{char}`   | To and including `char`                                 |
+| `dt{char}`   | Up to (not including) `char`                            |
+| `dF{char}`   | Backward to and including `char`                        |
+| `dT{char}`   | Backward to one after `char`                            |
+| `diw`        | Inner word                                              |
+| `daw`        | Around word (includes surrounding spaces)               |
 
 #### Change `c{motion}` / `cc`
 
@@ -132,15 +138,19 @@ Same motion set as `d`. Writes to register, **no text mutation**.
 
 | Command | Yanks                           |
 |---------|---------------------------------|
-| `yy`    | Whole line + trailing `\n`      |
-| `yw`    | Forward to next word start      |
-| `ye`    | To word end (inclusive)         |
-| `yb`    | Backward to word start          |
-| `y$`    | To end of line                  |
-| `y0`    | To start of line                |
-| `yf{c}` | To and including `char`         |
-| `yiw`   | Inner word                      |
-| `yaw`   | Around word (includes spaces)   |
+| `yy`         | Whole line + trailing `\n`                     |
+| `{count}yy`  | `{count}` whole lines + trailing `\n`          |
+| `y{count}j`  | Current line + `{count}` lines below (linewise) |
+| `y{count}k`  | Current line + `{count}` lines above (linewise) |
+| `yG`         | Current line to end of buffer (linewise)         |
+| `yw`         | Forward to next word start                        |
+| `ye`         | To word end (inclusive)                           |
+| `yb`         | Backward to word start                            |
+| `y$`         | To end of line                                    |
+| `y0`         | To start of line                                  |
+| `yf{c}`      | To and including `char`                           |
+| `yiw`        | Inner word                                        |
+| `yaw`        | Around word (includes spaces)                     |
 
 ---
 
@@ -169,8 +179,10 @@ Redo (`<C-r>`) is **not implemented** — see [Out of scope](#out-of-scope).
 ## Register and clipboard policy
 
 - One unnamed register (like Vim's `""` register).
-- Every `d`, `c`, `x`, `s`, `S`, `D`, `C`, `y`, `yy` writes to the register
-  and mirrors to the OS clipboard (via `copyToClipboard`, best-effort).
+- Every `d`, `c`, `x`, `s`, `S`, `D`, `C`, `y` operator form
+  (including `dd`, `{count}dd`, `d{count}j/k`, `dG`, `yy`, `{count}yy`,
+  `y{count}j/k`, `yG`) writes to the register and mirrors to the OS clipboard
+  (via `copyToClipboard`, best-effort).
 - `p` / `P` read from the unnamed register only (not the OS clipboard).
 - This gives stable behaviour across local terminals and SSH / OSC52 setups.
 
@@ -187,12 +199,12 @@ Redo (`<C-r>`) is **not implemented** — see [Out of scope](#out-of-scope).
 | Redo                  | Not implemented                        | `<C-r>`                       |
 | Visual mode           | Not implemented                        | `v`, `V`, `<C-v>`            |
 | Text objects          | Supports `iw`/`aw` only               | Full text-object set           |
-| Count prefix          | Not implemented (e.g. `3dw`)           | Supported                     |
+| Count prefix          | Partial: linewise `dd`/`yy` and `d/y{count}j/k` only | Supported                     |
 | Named registers       | Not implemented (`"a`, etc.)           | Supported                     |
 | Macros                | Not implemented (`q`, `@`)             | Supported                     |
 | Search                | Not implemented (`/`, `?`, `n`, `N`)   | Supported                     |
 | Ex commands           | Not implemented (`:s`, `:g`, etc.)     | Supported                     |
-| Multi-line operators  | `w/e/b`-based ops can cross lines; others line-local | Rich cross-line semantics |
+| Multi-line operators  | Supports `d/y` with `w/e/b`, `j/k` counts, and `G`; not full Vim motion matrix | Rich cross-line semantics |
 
 ---
 
@@ -207,7 +219,7 @@ These are **explicitly deferred** and not planned for this feature:
 - Ex command surface (`:s`, `:g`, `:r`, …)
 - Search mode (`/`, `?`, `n`, `N`)
 - Repeat (`.`)
-- Count prefixes (`3dw`, `2j`, …)
+- General count prefixes beyond current linewise scope (`3dw`, `2j`, …)
 - Redo (`<C-r>`) — no native redo primitive in the underlying readline editor;
   deferred until a suitable hook is available.
 - Window / tab / buffer management

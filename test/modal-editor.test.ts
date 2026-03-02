@@ -236,11 +236,170 @@ describe("delete operator — dw / de / db / d$ / d0 / dd", () => {
     chk("foo bar", ["w", "d", "0"], "bar", "foo ");
   });
 
-  it("dd cuts whole line content, clears text", () => {
+  it("dd deletes linewise and writes newline-terminated register", () => {
     const { editor } = createEditorWithSpy("hello");
     sendKeys(editor, ["d", "d"]);
-    assert.equal(editor.getRegister(), "hello");
+    assert.equal(editor.getRegister(), "hello\n");
     assert.equal(editor.getText(), "");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Linewise operators, counts, and whole-buffer flows
+// ---------------------------------------------------------------------------
+
+describe("linewise operators and counts", () => {
+  it("d2j deletes current line plus two below", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["d", "2", "j"]);
+
+    assert.equal(editor.getText(), "d");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("y2j yanks current line plus two below without mutation", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+    const before = editor.getText();
+
+    sendKeys(editor, ["y", "2", "j"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("3dd deletes three lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["3", "d", "d"]);
+
+    assert.equal(editor.getText(), "d");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("2yy yanks two lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+    const before = editor.getText();
+
+    sendKeys(editor, ["j", "2", "y", "y"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "b\nc\n");
+  });
+
+  it("d999j clamps deletion at EOF", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+
+    sendKeys(editor, ["d", "9", "9", "9", "j"]);
+
+    assert.equal(editor.getText(), "");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("y999k clamps yank at BOF", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+    const before = editor.getText();
+
+    sendKeys(editor, ["G", "y", "9", "9", "9", "k"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("ggdG deletes the whole buffer", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+
+    sendKeys(editor, ["g", "g", "d", "G"]);
+
+    assert.equal(editor.getText(), "");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("ggyG yanks the whole buffer without mutation", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+    const before = editor.getText();
+
+    sendKeys(editor, ["g", "g", "y", "G"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("dG from middle line deletes to EOF linewise", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["j", "d", "G"]);
+
+    assert.equal(editor.getText(), "a");
+    assert.equal(editor.getRegister(), "b\nc\nd\n");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("invalid continuation after counted delete cancels cleanly", () => {
+    const { editor } = createMultiLineEditor("foo bar\nbaz");
+
+    sendKeys(editor, ["d", "2", "z", "w", "x"]);
+
+    assert.equal(editor.getText(), "foo ar\nbaz");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("rejects dual-count delete forms like 2d3j", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["2", "d", "3", "j", "x"]);
+
+    assert.equal(editor.getText(), "a\n\nc\nd");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("counted unsupported delete motion d2w cancels instead of deleting", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    sendKeys(editor, ["d", "2", "w", "x"]);
+
+    assert.equal(editor.getText(), "oo bar");
+    assert.equal(editor.getRegister(), "f");
+  });
+
+  it("counted unsupported yank motion y2w cancels instead of yanking", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    sendKeys(editor, ["y", "2", "w"]);
+
+    assert.equal(editor.getText(), "foo bar");
+    assert.equal(editor.getRegister(), "");
+  });
+
+  it("2d0 does not swallow 0 as a second count", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    sendKeys(editor, ["2", "d", "0", "x"]);
+
+    assert.equal(editor.getText(), "oo bar");
+    assert.equal(editor.getRegister(), "f");
+  });
+});
+
+describe("buffer motions — gg / G", () => {
+  it("G moves to last line at column 0", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["G", "x"]);
+
+    assert.equal(editor.getText(), "foo\nar");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("gg moves to first line at column 0", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["G", "g", "g", "x"]);
+
+    assert.equal(editor.getText(), "oo\nbar");
+    assert.equal(editor.getRegister(), "f");
   });
 });
 

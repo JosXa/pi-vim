@@ -46,3 +46,4 @@ export const CTRL_K = "\x0b"; // kill to end of line
 export const CTRL_UNDERSCORE = "\x1f"; // ctrl+_ — readline undo
 export const NEWLINE = "\n"; // newline character
 export const ESC_UP = "\x1b[A"; // cursor up
+export const ESC_DOWN = "\x1b[B"; // cursor down
