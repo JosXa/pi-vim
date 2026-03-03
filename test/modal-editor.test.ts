@@ -48,6 +48,71 @@ function chkMode(
   assert.equal(editor.getMode(), expectedMode, `mode after [${keys.join("")}]`);
 }
 
+function makeGeneratedLineFixtures(count: number): string[] {
+  let seed = 0x51f15eed;
+  const next = (): number => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed;
+  };
+
+  const words = ["alpha", "beta_2", "GAMMA", "z9", "m_n"];
+  const punct = ["-", "--", "::", ".", ",", "!?", "#"];
+  const spaces = [" ", "  ", "   ", "\t"];
+  const fixtures = ["", "   ", "---", "a", "a   b", "foo--bar"];
+
+  for (let i = 0; i < count; i++) {
+    const parts: string[] = [];
+    const partCount = 1 + (next() % 6);
+
+    for (let part = 0; part < partCount; part++) {
+      const bucket = next() % 5;
+      if (bucket <= 1) {
+        parts.push(words[next() % words.length]!);
+      } else if (bucket === 2) {
+        parts.push(punct[next() % punct.length]!);
+      } else {
+        parts.push(spaces[next() % spaces.length]!);
+      }
+    }
+
+    fixtures.push(parts.join(""));
+  }
+
+  return fixtures;
+}
+
+function runScenario(
+  initial: string,
+  keys: string[],
+  mode: "fast" | "canonical",
+): {
+  text: string;
+  register: string;
+  editorMode: "normal" | "insert";
+  cursorLine: number;
+  cursorCol: number;
+} {
+  const { editor } = initial.includes("\n")
+    ? createMultiLineEditor(initial)
+    : createEditorWithSpy(initial);
+
+  if (mode === "canonical") {
+    (editor as any).tryFindWordTargetLineLocal = () => null;
+  }
+
+  sendKeys(editor, keys);
+
+  const cursor = editor.getCursor();
+
+  return {
+    text: editor.getText(),
+    register: editor.getRegister(),
+    editorMode: editor.getMode(),
+    cursorLine: cursor.line,
+    cursorCol: cursor.col,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Mode transitions
 // ---------------------------------------------------------------------------
@@ -115,6 +180,16 @@ describe("mode transitions", () => {
     assert.equal(editor.getText(), "PASTEabc");
     assert.equal(editor.getMode(), "insert");
   });
+
+  it("escape from insert clears unterminated bracketed paste state", () => {
+    const { editor } = createEditorWithSpy("abc");
+
+    sendKeys(editor, ["i", "\x1b[200~", "\x1b", "l", "x"]);
+
+    assert.equal(editor.getMode(), "normal");
+    assert.equal(editor.getText(), "ac");
+    assert.equal(editor.getRegister(), "b");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -161,11 +236,170 @@ describe("delete operator — dw / de / db / d$ / d0 / dd", () => {
     chk("foo bar", ["w", "d", "0"], "bar", "foo ");
   });
 
-  it("dd cuts whole line content, clears text", () => {
+  it("dd deletes linewise and writes newline-terminated register", () => {
     const { editor } = createEditorWithSpy("hello");
     sendKeys(editor, ["d", "d"]);
-    assert.equal(editor.getRegister(), "hello");
+    assert.equal(editor.getRegister(), "hello\n");
     assert.equal(editor.getText(), "");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Linewise operators, counts, and whole-buffer flows
+// ---------------------------------------------------------------------------
+
+describe("linewise operators and counts", () => {
+  it("d2j deletes current line plus two below", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["d", "2", "j"]);
+
+    assert.equal(editor.getText(), "d");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("y2j yanks current line plus two below without mutation", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+    const before = editor.getText();
+
+    sendKeys(editor, ["y", "2", "j"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("3dd deletes three lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["3", "d", "d"]);
+
+    assert.equal(editor.getText(), "d");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("2yy yanks two lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+    const before = editor.getText();
+
+    sendKeys(editor, ["j", "2", "y", "y"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "b\nc\n");
+  });
+
+  it("d999j clamps deletion at EOF", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+
+    sendKeys(editor, ["d", "9", "9", "9", "j"]);
+
+    assert.equal(editor.getText(), "");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("y999k clamps yank at BOF", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+    const before = editor.getText();
+
+    sendKeys(editor, ["G", "y", "9", "9", "9", "k"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("ggdG deletes the whole buffer", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+
+    sendKeys(editor, ["g", "g", "d", "G"]);
+
+    assert.equal(editor.getText(), "");
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("ggyG yanks the whole buffer without mutation", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+    const before = editor.getText();
+
+    sendKeys(editor, ["g", "g", "y", "G"]);
+
+    assert.equal(editor.getText(), before);
+    assert.equal(editor.getRegister(), "a\nb\nc\n");
+  });
+
+  it("dG from middle line deletes to EOF linewise", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["j", "d", "G"]);
+
+    assert.equal(editor.getText(), "a");
+    assert.equal(editor.getRegister(), "b\nc\nd\n");
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("invalid continuation after counted delete cancels cleanly", () => {
+    const { editor } = createMultiLineEditor("foo bar\nbaz");
+
+    sendKeys(editor, ["d", "2", "z", "w", "x"]);
+
+    assert.equal(editor.getText(), "foo ar\nbaz");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("rejects dual-count delete forms like 2d3j", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["2", "d", "3", "j", "x"]);
+
+    assert.equal(editor.getText(), "a\n\nc\nd");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("counted unsupported delete motion d2w cancels instead of deleting", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    sendKeys(editor, ["d", "2", "w", "x"]);
+
+    assert.equal(editor.getText(), "oo bar");
+    assert.equal(editor.getRegister(), "f");
+  });
+
+  it("counted unsupported yank motion y2w cancels instead of yanking", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    sendKeys(editor, ["y", "2", "w"]);
+
+    assert.equal(editor.getText(), "foo bar");
+    assert.equal(editor.getRegister(), "");
+  });
+
+  it("2d0 does not swallow 0 as a second count", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    sendKeys(editor, ["2", "d", "0", "x"]);
+
+    assert.equal(editor.getText(), "oo bar");
+    assert.equal(editor.getRegister(), "f");
+  });
+});
+
+describe("buffer motions — gg / G", () => {
+  it("G moves to last line at column 0", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["G", "x"]);
+
+    assert.equal(editor.getText(), "foo\nar");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("gg moves to first line at column 0", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["G", "g", "g", "x"]);
+
+    assert.equal(editor.getText(), "oo\nbar");
+    assert.equal(editor.getRegister(), "f");
   });
 });
 
@@ -372,6 +606,257 @@ describe("EOL and newline semantics", () => {
     sendKeys(editor, ["e", "x"]);
     assert.equal(editor.getRegister(), "1");
     assert.equal(editor.getText(), "line\nline2"); // only '1' gone, newline intact
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Word motion path selection (line-local fast path vs canonical fallback)
+// ---------------------------------------------------------------------------
+
+describe("word motion path selection", () => {
+  it("line-local w avoids canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["w"]);
+    assert.equal(calls, 0);
+  });
+
+  it("line-local e avoids canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["e"]);
+    assert.equal(calls, 0);
+  });
+
+  it("line-local b avoids canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+    sendKeys(editor, ["w"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["b"]);
+    assert.equal(calls, 0);
+  });
+
+  it("cache uncertainty falls back to canonical absolute scanner", () => {
+    const { editor } = createEditorWithSpy("alpha beta");
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    raw.wordBoundaryCache.tryFindTarget = () => null;
+
+    sendKeys(editor, ["w"]);
+    assert.ok(calls > 0);
+  });
+
+  it("w at EOL falls back to canonical absolute scanner", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    sendKeys(editor, ["$"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["w"]);
+    assert.ok(calls > 0);
+  });
+
+  it("e at EOL falls back to canonical absolute scanner", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    sendKeys(editor, ["$"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["e"]);
+    assert.ok(calls > 0);
+  });
+
+  it("b from BOL falls back to canonical absolute scanner", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    sendKeys(editor, ["j", "0"]);
+
+    const raw = editor as any;
+    const original = raw.findWordTargetInText.bind(raw);
+    let calls = 0;
+
+    raw.findWordTargetInText = (...args: unknown[]) => {
+      calls++;
+      return original(...args);
+    };
+
+    sendKeys(editor, ["b"]);
+    assert.ok(calls > 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Operator word-motion path selection
+// ---------------------------------------------------------------------------
+
+describe("operator word-motion path selection", () => {
+  it("line-local d/c/y + w/e/b avoid canonical absolute scanner", () => {
+    const scenarios: Array<{ name: string; initial: string; keys: string[] }> = [
+      { name: "dw", initial: "alpha beta", keys: ["d", "w"] },
+      { name: "de", initial: "alpha beta", keys: ["d", "e"] },
+      { name: "db", initial: "alpha beta", keys: ["w", "d", "b"] },
+      { name: "cw", initial: "alpha beta", keys: ["c", "w"] },
+      { name: "ce", initial: "alpha beta", keys: ["c", "e"] },
+      { name: "cb", initial: "alpha beta", keys: ["w", "c", "b"] },
+      { name: "yw", initial: "alpha beta", keys: ["y", "w"] },
+      { name: "ye", initial: "alpha beta", keys: ["y", "e"] },
+      { name: "yb", initial: "alpha beta", keys: ["w", "y", "b"] },
+    ];
+
+    for (const scenario of scenarios) {
+      const { editor } = createEditorWithSpy(scenario.initial);
+      const raw = editor as any;
+      const original = raw.findWordTargetInText.bind(raw);
+      let calls = 0;
+
+      raw.findWordTargetInText = (...args: unknown[]) => {
+        calls++;
+        return original(...args);
+      };
+
+      sendKeys(editor, scenario.keys);
+      assert.equal(calls, 0, `${scenario.name} should stay line-local`);
+    }
+  });
+
+  it("cross-line operator word motions fall back to canonical scanner", () => {
+    const scenarios: Array<{ name: string; initial: string; keys: string[] }> = [
+      { name: "dw@EOL", initial: "foo\nbar", keys: ["$", "d", "w"] },
+      { name: "cw@EOL", initial: "foo\nbar", keys: ["$", "c", "w"] },
+      { name: "yw@EOL", initial: "foo\nbar", keys: ["$", "y", "w"] },
+      { name: "db@BOL", initial: "foo\nbar", keys: ["j", "0", "d", "b"] },
+      { name: "cb@BOL", initial: "foo\nbar", keys: ["j", "0", "c", "b"] },
+      { name: "yb@BOL", initial: "foo\nbar", keys: ["j", "0", "y", "b"] },
+    ];
+
+    for (const scenario of scenarios) {
+      const { editor } = createMultiLineEditor(scenario.initial);
+      const raw = editor as any;
+      const original = raw.findWordTargetInText.bind(raw);
+      let calls = 0;
+
+      raw.findWordTargetInText = (...args: unknown[]) => {
+        calls++;
+        return original(...args);
+      };
+
+      sendKeys(editor, scenario.keys);
+      assert.ok(calls > 0, `${scenario.name} should fall back`);
+    }
+  });
+});
+
+describe("word-motion fast path differential", () => {
+  const assertFastEqualsCanonical = (initial: string, keys: string[], label: string): void => {
+    const fast = runScenario(initial, keys, "fast");
+    const canonical = runScenario(initial, keys, "canonical");
+    assert.deepEqual(fast, canonical, label);
+  };
+
+  it("matches canonical behavior on generated line fixtures", () => {
+    const fixtures = makeGeneratedLineFixtures(80);
+    const scenarios: Array<{ name: string; keys: string[] }> = [
+      { name: "w+x", keys: ["w", "x"] },
+      { name: "e+x", keys: ["e", "x"] },
+      { name: "w,b,x", keys: ["w", "b", "x"] },
+      { name: "dw", keys: ["d", "w"] },
+      { name: "de", keys: ["d", "e"] },
+      { name: "w,db", keys: ["w", "d", "b"] },
+      { name: "cw", keys: ["c", "w"] },
+      { name: "ce", keys: ["c", "e"] },
+      { name: "w,cb", keys: ["w", "c", "b"] },
+      { name: "yw", keys: ["y", "w"] },
+      { name: "ye", keys: ["y", "e"] },
+      { name: "w,yb", keys: ["w", "y", "b"] },
+    ];
+
+    for (const line of fixtures) {
+      for (const scenario of scenarios) {
+        assertFastEqualsCanonical(
+          line,
+          scenario.keys,
+          `line=${JSON.stringify(line)} scenario=${scenario.name}`,
+        );
+      }
+    }
+  });
+});
+
+describe("word-motion guard boundary regressions", () => {
+  const assertFastEqualsCanonical = (initial: string, keys: string[], label: string): void => {
+    const fast = runScenario(initial, keys, "fast");
+    const canonical = runScenario(initial, keys, "canonical");
+    assert.deepEqual(fast, canonical, label);
+  };
+
+  it("matches canonical behavior at EOL/BOL + punctuation/whitespace/empty boundaries", () => {
+    const cases: Array<{ label: string; initial: string; keys: string[] }> = [
+      { label: "EOL cross-line dw", initial: "foo\nbar", keys: ["$", "d", "w"] },
+      { label: "BOL cross-line yb", initial: "foo\nbar", keys: ["j", "0", "y", "b"] },
+      { label: "punctuation run", initial: "foo---bar", keys: ["w", "x"] },
+      { label: "whitespace run", initial: "foo     bar", keys: ["w", "x"] },
+      { label: "empty line", initial: "", keys: ["w", "d", "w"] },
+    ];
+
+    for (const testCase of cases) {
+      assertFastEqualsCanonical(testCase.initial, testCase.keys, testCase.label);
+    }
+  });
+
+  it("keeps insert-mode behavior unaffected", () => {
+    assertFastEqualsCanonical("hello", ["i", "X", "Y", "\x1b", "x"], "insert mode");
+  });
+
+  it("keeps non-word command behavior unaffected", () => {
+    assertFastEqualsCanonical("foo", ["x", "P", "f", "o", "x"], "non-word commands");
   });
 });
 
@@ -743,6 +1228,26 @@ describe("operator cancellation", () => {
 
     assert.equal(editor.getText(), "foo ar");
     assert.equal(editor.getRegister(), "b");
+  });
+
+  it("double-escape recovery does not forward escape upward", () => {
+    const { editor } = createEditorWithSpy("foo bar");
+
+    const customEditorProto = Object.getPrototypeOf(Object.getPrototypeOf(editor));
+    const originalHandleInput = customEditorProto.handleInput;
+    let forwardedEscapeCount = 0;
+
+    customEditorProto.handleInput = function (this: unknown, data: string): unknown {
+      if (data === "\x1b") forwardedEscapeCount++;
+      return originalHandleInput.call(this, data);
+    };
+
+    try {
+      sendKeys(editor, ["\x1b[200~", "\x1b", "\x1b"]);
+      assert.equal(forwardedEscapeCount, 0);
+    } finally {
+      customEditorProto.handleInput = originalHandleInput;
+    }
   });
 
   it("split bracketed paste end marker closes discard state", () => {

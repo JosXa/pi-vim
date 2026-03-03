@@ -5,6 +5,40 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { findWordMotionTarget, findCharMotionTarget } from "../motions.js";
+import { WordBoundaryCache } from "../word-boundary-cache.js";
+
+function makeGeneratedLineFixtures(count: number): string[] {
+  let seed = 0x1badf00d;
+  const next = (): number => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed;
+  };
+
+  const words = ["alpha", "beta_2", "GAMMA", "z9", "m_n"];
+  const punct = ["-", "--", "::", ".", ",", "!?", "#"];
+  const spaces = [" ", "  ", "   ", "\t"];
+  const fixtures = ["", "   ", "---", "a", "a   b", "foo--bar"];
+
+  for (let i = 0; i < count; i++) {
+    const parts: string[] = [];
+    const partCount = 1 + (next() % 6);
+
+    for (let part = 0; part < partCount; part++) {
+      const bucket = next() % 5;
+      if (bucket <= 1) {
+        parts.push(words[next() % words.length]!);
+      } else if (bucket === 2) {
+        parts.push(punct[next() % punct.length]!);
+      } else {
+        parts.push(spaces[next() % spaces.length]!);
+      }
+    }
+
+    fixtures.push(parts.join(""));
+  }
+
+  return fixtures;
+}
 
 // ---------------------------------------------------------------------------
 // findWordMotionTarget
@@ -66,6 +100,100 @@ describe("findWordMotionTarget — backward/start (b)", () => {
   it("b skips trailing spaces before the previous word", () => {
     // "foo   bar", col=6 ('b') → b skips '   ', lands on 'f' at 0
     assert.equal(findWordMotionTarget("foo   bar", 6, "backward", "start"), 0);
+  });
+});
+
+describe("WordBoundaryCache", () => {
+  it("keys entries by exact line content", () => {
+    const cache = new WordBoundaryCache();
+
+    const first = cache.get("alpha beta");
+    const second = cache.get("alpha beta");
+    const third = cache.get("alpha  beta");
+
+    assert.equal(first, second);
+    assert.notEqual(first, third);
+  });
+
+  it("evicts oldest entries when cache size is exceeded", () => {
+    const cache = new WordBoundaryCache(2);
+
+    const first = cache.get("first");
+    const second = cache.get("second");
+    cache.get("third");
+
+    // "second" survives right after first eviction.
+    assert.equal(cache.get("second"), second);
+
+    // "first" should be evicted first (FIFO eviction).
+    const firstReloaded = cache.get("first");
+    assert.notEqual(firstReloaded, first);
+  });
+
+  it("falls back to default capacity for invalid maxEntries", () => {
+    const cache = new WordBoundaryCache(0);
+
+    // Should not thrash every insertion: same key remains cached.
+    const first = cache.get("stable");
+    const second = cache.get("stable");
+
+    assert.equal(first, second);
+  });
+
+  it("returns precomputed targets equivalent to canonical line scanner", () => {
+    const cache = new WordBoundaryCache();
+    const line = "foo_bar -- baz";
+
+    assert.equal(
+      cache.tryFindTarget(line, 0, "forward", "start"),
+      findWordMotionTarget(line, 0, "forward", "start"),
+    );
+    assert.equal(
+      cache.tryFindTarget(line, 0, "forward", "end"),
+      findWordMotionTarget(line, 0, "forward", "end"),
+    );
+    assert.equal(
+      cache.tryFindTarget(line, 11, "backward", "start"),
+      findWordMotionTarget(line, 11, "backward", "start"),
+    );
+  });
+
+  it("returns null for uncertain cursor inputs", () => {
+    const cache = new WordBoundaryCache();
+
+    assert.equal(cache.tryFindTarget("abc", -1, "forward", "start"), null);
+    assert.equal(cache.tryFindTarget("abc", Number.NaN, "forward", "start"), null);
+  });
+});
+
+describe("WordBoundaryCache differential", () => {
+  it("matches canonical targets on generated line fixtures", () => {
+    const cache = new WordBoundaryCache();
+    const fixtures = makeGeneratedLineFixtures(80);
+
+    for (const line of fixtures) {
+      for (let col = 0; col <= line.length; col++) {
+        const cases: Array<[
+          direction: "forward" | "backward",
+          target: "start" | "end",
+        ]> = [
+          ["forward", "start"],
+          ["forward", "end"],
+          ["backward", "start"],
+        ];
+
+        for (const [direction, target] of cases) {
+          const fast = cache.tryFindTarget(line, col, direction, target);
+          const canonical = findWordMotionTarget(line, col, direction, target);
+
+          assert.equal(
+            fast,
+            canonical,
+            `line=${JSON.stringify(line)} col=${col} ${direction}/${target}`,
+          );
+        }
+      }
+    }
   });
 });
 
