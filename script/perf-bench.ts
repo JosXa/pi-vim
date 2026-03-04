@@ -177,6 +177,34 @@ function benchmarkSingleOpWithReset(
   return { unit: "us/op", samples, stats: toStats(samples) };
 }
 
+function benchmarkSingleOpFresh(
+  create: () => ModalEditor,
+  before: (editor: ModalEditor) => void,
+  runOp: (editor: ModalEditor) => void,
+  iterations: number,
+  samplesCount: number,
+): SampledMetric {
+  const samples: number[] = [];
+
+  for (let sampleIdx = 0; sampleIdx < samplesCount; sampleIdx++) {
+    let totalUs = 0;
+
+    for (let i = 0; i < iterations; i++) {
+      const editor = create();
+      before(editor);
+
+      const started = performance.now();
+      runOp(editor);
+      const ended = performance.now();
+      totalUs += (ended - started) * 1000;
+    }
+
+    samples.push(totalUs / iterations);
+  }
+
+  return { unit: "us/op", samples, stats: toStats(samples) };
+}
+
 function makeWordLine(words: number): string {
   const out: string[] = [];
   for (let i = 0; i < words; i++) {
@@ -206,6 +234,68 @@ function runResponsivenessBenchmarks(): Record<string, SampledMetric> {
     () => createEditor("abc"),
     (editor) => editor.handleInput("z"),
     20_000,
+    samplesCount,
+  );
+
+  const countWordLine = makeWordLine(400);
+  metrics["10w"] = benchmarkSingleOpWithReset(
+    () => createEditor(countWordLine),
+    () => {},
+    (editor) => {
+      editor.handleInput("1");
+      editor.handleInput("0");
+      editor.handleInput("w");
+    },
+    (editor) => editor.handleInput("0"),
+    220,
+    samplesCount,
+  );
+
+  const charFindLine = "aX".repeat(300);
+  metrics["3fX"] = benchmarkSingleOpWithReset(
+    () => createEditor(charFindLine),
+    () => {},
+    (editor) => {
+      editor.handleInput("3");
+      editor.handleInput("f");
+      editor.handleInput("X");
+    },
+    (editor) => editor.handleInput("0"),
+    300,
+    samplesCount,
+  );
+
+  const verticalLinesText = Array.from({ length: 320 }, (_, i) => `line_${i}`).join("\n");
+  metrics["200j"] = benchmarkSingleOpWithReset(
+    () => createEditor(verticalLinesText),
+    () => {},
+    (editor) => {
+      editor.handleInput("2");
+      editor.handleInput("0");
+      editor.handleInput("0");
+      editor.handleInput("j");
+    },
+    (editor) => {
+      editor.handleInput("g");
+      editor.handleInput("g");
+    },
+    120,
+    samplesCount,
+  );
+
+  metrics["50p"] = benchmarkSingleOpFresh(
+    () => createEditor("seed next"),
+    (editor) => {
+      editor.handleInput("y");
+      editor.handleInput("w");
+      editor.handleInput("0");
+    },
+    (editor) => {
+      editor.handleInput("5");
+      editor.handleInput("0");
+      editor.handleInput("p");
+    },
+    120,
     samplesCount,
   );
 
