@@ -762,6 +762,49 @@ describe("Universal Counts: Word Motions", () => {
   });
 });
 
+describe("Universal Counts: Change and Nav", () => {
+  it("c2w deletes two words and enters insert mode", () => {
+    const { editor } = createEditorWithSpy("foo bar baz");
+
+    sendKeys(editor, ["c", "2", "w"]);
+
+    assert.equal(editor.getText(), "baz");
+    assert.equal(editor.getMode(), "insert");
+  });
+
+  it("3j moves cursor down three lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd\ne");
+
+    sendKeys(editor, ["3", "j"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 3, col: 0 });
+  });
+
+  it("3l moves cursor right by three columns", () => {
+    const { editor } = createEditorWithSpy("abcdef");
+
+    sendKeys(editor, ["3", "l"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+  });
+
+  it("3h moves cursor left by three columns", () => {
+    const { editor } = createEditorWithSpy("abcdef");
+
+    sendKeys(editor, ["$", "h", "3", "h"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 2 });
+  });
+
+  it("3k moves cursor up three lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd\ne");
+
+    sendKeys(editor, ["G", "3", "k"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 1, col: 0 });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // EOL / newline edge cases  (Task 7)
 // ---------------------------------------------------------------------------
@@ -1529,10 +1572,10 @@ describe("additional count combinations", () => {
     assert.equal(editor.getRegister(), "a\nb\n");
   });
 
-  it("2j executes j once and discards count (unsupported)", () => {
+  it("2j moves cursor down two lines (counted navigation)", () => {
     const { editor } = createMultiLineEditor("a\nb\nc\nd");
     sendKeys(editor, ["2", "j", "x"]);
-    assert.equal(editor.getText(), "a\n\nc\nd");
+    assert.equal(editor.getText(), "a\nb\n\nd");
   });
 
   it("2dG cancels cleanly and swallows G because it is printable", () => {

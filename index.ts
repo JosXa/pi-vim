@@ -507,15 +507,23 @@ export class ModalEditor extends CustomEditor {
       this.pendingMotion = data as PendingMotion;
       return;
     }
-    if (this.prefixCount.length > 0 || this.operatorCount.length > 0) {
+
+    const hasCount = this.prefixCount.length > 0 || this.operatorCount.length > 0;
+    const supportsCountedWordMotion = data === "w" || data === "e" || data === "b";
+    const supportsCountedTextObject = data === "i" || data === "a";
+
+    if (hasCount && !supportsCountedWordMotion && !supportsCountedTextObject) {
       this.cancelPendingOperator(data);
       return;
     }
-    if (data === "i" || data === "a") {
+
+    if (supportsCountedTextObject) {
       this.pendingTextObject = data;
       return;
     }
-    if (this.deleteWithMotion(data)) {
+
+    const motionCount = supportsCountedWordMotion ? this.takeTotalCount(1) : 1;
+    if (this.deleteWithMotion(data, motionCount)) {
       this.pendingOperator = null;
       this.mode = "insert";
       return;
@@ -546,6 +554,11 @@ export class ModalEditor extends CustomEditor {
         return;
       }
 
+      if (data === "c") {
+        this.pendingOperator = "c";
+        return;
+      }
+
       const supportsCountedStandaloneEdit = (
         data === "x"
         || data === "s"
@@ -565,6 +578,34 @@ export class ModalEditor extends CustomEditor {
         || data === "e"
         || data === "b"
       );
+      const supportsCountedNav = (
+        data === "h"
+        || data === "j"
+        || data === "k"
+        || data === "l"
+      );
+
+      if (supportsCountedNav) {
+        const count = this.takeTotalCount(1);
+        const clamped = Math.min(count, MAX_COUNT);
+        if (data === "h") {
+          this.moveCursorBy(-clamped);
+        } else if (data === "l") {
+          this.moveCursorBy(clamped);
+        } else {
+          // j/k: clamp vertical nav to buffer size to prevent TUI stalls
+          const lines = this.getLines();
+          const cursorLine = this.getCursor().line;
+          const safeCount = data === "j"
+            ? Math.min(clamped, lines.length - 1 - cursorLine)
+            : Math.min(clamped, cursorLine);
+          const seq = data === "j" ? ESC_DOWN : ESC_UP;
+          for (let i = 0; i < safeCount; i++) {
+            super.handleInput(seq);
+          }
+        }
+        return;
+      }
 
       if (!supportsCountedStandaloneEdit && !supportsCountedCharMotion && !supportsCountedWordMotion) {
         // Unsupported prefixed forms: drop count and keep processing this key.
