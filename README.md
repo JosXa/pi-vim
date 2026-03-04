@@ -50,34 +50,42 @@ Insert-mode shortcuts (stay in Insert mode):
 
 ### Navigation (Normal mode)
 
-| Key   | Action                  |
-|-------|-------------------------|
-| `h`   | Left                    |
-| `l`   | Right                   |
-| `j`   | Down                    |
-| `k`   | Up                      |
-| `0`   | Line start              |
-| `$`   | Line end                |
-| `gg`  | Buffer start (line 1)   |
-| `G`   | Buffer end (last line)  |
-| `w`   | Next word start         |
-| `b`   | Previous word start     |
-| `e`   | Word end (inclusive)    |
+A `{count}` prefix can be prepended to any navigation key (max: `9999`).
+
+| Key           | Action                        |
+|---------------|-------------------------------|
+| `h`           | Left                          |
+| `l`           | Right                         |
+| `j`           | Down                          |
+| `k`           | Up                            |
+| `{count}h/l`  | Move left/right `{count}` cols  |
+| `{count}j/k`  | Move down/up `{count}` lines (clamped to buffer size) |
+| `0`           | Line start                    |
+| `$`           | Line end                      |
+| `gg`          | Buffer start (line 1)         |
+| `G`           | Buffer end (last line)        |
+| `w`           | Next word start               |
+| `b`           | Previous word start           |
+| `e`           | Word end (inclusive)          |
+| `{count}w/b/e`| Move `{count}` words          |
 
 ---
 
 ### Character-find motions (Normal mode)
 
-| Key        | Action                                         |
-|------------|------------------------------------------------|
-| `f{char}`  | Jump forward to `char` (inclusive)             |
-| `F{char}`  | Jump backward to `char` (inclusive)            |
-| `t{char}`  | Jump forward to one before `char` (exclusive)  |
-| `T{char}`  | Jump backward to one after `char` (exclusive)  |
-| `;`        | Repeat last `f/F/t/T` motion                   |
-| `,`        | Repeat last motion in reverse direction         |
+A `{count}` prefix finds the Nth occurrence of `{char}` on the line.
 
-Char-find motions compose with operators: `df{char}`, `ct{char}`, etc.
+| Key              | Action                                         |
+|------------------|------------------------------------------------|
+| `f{char}`        | Jump forward to `char` (inclusive)             |
+| `F{char}`        | Jump backward to `char` (inclusive)            |
+| `t{char}`        | Jump forward to one before `char` (exclusive)  |
+| `T{char}`        | Jump backward to one after `char` (exclusive)  |
+| `{count}f{char}` | Jump to Nth occurrence of `char` forward       |
+| `;`              | Repeat last `f/F/t/T` motion                   |
+| `,`              | Repeat last motion in reverse direction         |
+
+Char-find motions compose with operators: `df{char}`, `ct{char}`, `d{count}t{char}`, etc.
 
 ---
 
@@ -88,47 +96,57 @@ All operators write to the unnamed register and mirror to the system clipboard
 
 #### Delete `d{motion}` / `dd`
 
-| Command    | Deletes                                     |
-|------------|---------------------------------------------|
-| `dw`         | Forward to next word start (exclusive, can cross lines) |
-| `de`         | Forward to word end (inclusive, can cross lines)        |
-| `db`         | Backward to word start (exclusive, can cross lines)     |
-| `d$`         | To end of line                                          |
-| `d0`         | To start of line                                        |
-| `dd`         | Current line (linewise)                                 |
-| `{count}dd`  | `{count}` lines (linewise)                              |
-| `d{count}j`  | Current line + `{count}` lines below (linewise)         |
-| `d{count}k`  | Current line + `{count}` lines above (linewise)         |
-| `dG`         | Current line to end of buffer (linewise)                |
-| `df{char}`   | To and including `char`                                 |
-| `dt{char}`   | Up to (not including) `char`                            |
-| `dF{char}`   | Backward to and including `char`                        |
-| `dT{char}`   | Backward to one after `char`                            |
-| `diw`        | Inner word                                              |
-| `daw`        | Around word (includes surrounding spaces)               |
+A `{count}` or dual-count prefix (`{pfx}d{op}{motion}`) is supported for
+word, char-find, and linewise motions. Maximum total count: `9999`.
+
+| Command           | Deletes                                                   |
+|-------------------|-----------------------------------------------------------|
+| `dw`              | Forward to next word start (exclusive, can cross lines)   |
+| `de`              | Forward to word end (inclusive, can cross lines)          |
+| `db`              | Backward to word start (exclusive, can cross lines)       |
+| `d{count}w/e/b`   | Forward/backward `{count}` words                          |
+| `d$`              | To end of line                                            |
+| `d0`              | To start of line                                          |
+| `dd`              | Current line (linewise)                                   |
+| `{count}dd`       | `{count}` lines (linewise)                                |
+| `d{count}j`       | Current line + `{count}` lines below (linewise)           |
+| `d{count}k`       | Current line + `{count}` lines above (linewise)           |
+| `dG`              | Current line to end of buffer (linewise)                  |
+| `df{char}`        | To and including `char`                                   |
+| `d{count}f{char}` | To and including Nth `char`                               |
+| `dt{char}`        | Up to (not including) `char`                              |
+| `dF{char}`        | Backward to and including `char`                          |
+| `dT{char}`        | Backward to one after `char`                              |
+| `diw`             | Inner word                                                |
+| `daw`             | Around word (includes surrounding spaces)                 |
+| `d{count}aw`      | Around `{count}` words                                    |
 
 #### Change `c{motion}` / `cc`
 
-Same motion set as `d`. Deletes text then enters Insert mode.
+Same motion and count set as `d`. Deletes text then enters Insert mode.
 
-| Command | Alias |
-|---------|-------|
-| `cw`    | delete word + Insert |
-| `ciw`   | change inner word |
-| `caw`   | change around word |
-| `cc`    | delete line + Insert |
-| `c$`    | delete to EOL + Insert |
-| …       | all `d` motions apply |
+| Command         | Action                             |
+|-----------------|------------------------------------|
+| `cw`            | Delete word + Insert               |
+| `c{count}w/e/b` | Delete `{count}` words + Insert    |
+| `ciw`           | Change inner word                  |
+| `caw`           | Change around word                 |
+| `cc`            | Delete line content + Insert       |
+| `c$`            | Delete to EOL + Insert             |
+| …               | All `d` motions apply              |
 
 #### Single-key edits
 
-| Key | Action                                       |
-|-----|----------------------------------------------|
-| `x` | Delete char under cursor (no-op at/past EOL) |
-| `s` | Delete char under cursor + Insert mode       |
-| `S` | Delete line content + Insert mode            |
-| `D` | Delete cursor to EOL (captures `\n` if at EOL with next line) |
-| `C` | Delete cursor to EOL + Insert mode           |
+A `{count}` prefix is supported for `x`, `p`, `P`. Maximum: `9999`.
+
+| Key          | Action                                                        |
+|--------------|---------------------------------------------------------------|
+| `x`          | Delete char under cursor (no-op at/past EOL)                  |
+| `{count}x`   | Delete `{count}` chars                                        |
+| `s`          | Delete char under cursor + Insert mode                        |
+| `S`          | Delete line content + Insert mode                             |
+| `D`          | Delete cursor to EOL (captures `\n` if at EOL with next line) |
+| `C`          | Delete cursor to EOL + Insert mode                            |
 
 ---
 
@@ -156,10 +174,12 @@ Same motion set as `d`. Writes to register, **no text mutation**.
 
 ### Put / Paste
 
-| Key | Action                                                      |
-|-----|-------------------------------------------------------------|
-| `p` | Put after cursor (char-wise) / new line below (line-wise)   |
-| `P` | Put before cursor (char-wise) / new line above (line-wise)  |
+| Key          | Action                                                      |
+|--------------|-------------------------------------------------------------|
+| `p`          | Put after cursor (char-wise) / new line below (line-wise)   |
+| `P`          | Put before cursor (char-wise) / new line above (line-wise)  |
+| `{count}p`   | Put `{count}` times after cursor                            |
+| `{count}P`   | Put `{count}` times before cursor                           |
 
 Put reads from the **unnamed register** (not OS clipboard).  
 Line-wise detection: register content ending in `\n` is treated as line-wise.
@@ -199,7 +219,7 @@ Redo (`<C-r>`) is **not implemented** — see [Out of scope](#out-of-scope).
 | Redo                  | Not implemented                        | `<C-r>`                       |
 | Visual mode           | Not implemented                        | `v`, `V`, `<C-v>`            |
 | Text objects          | Supports `iw`/`aw` only               | Full text-object set           |
-| Count prefix          | Partial: linewise `dd`/`yy` and `d/y{count}j/k` only | Supported                     |
+| Count prefix          | Supported for operators, word/char motions, navigation, and edits (`x`, `p`/`P`); capped at `MAX_COUNT=9999` to prevent abuse | Full support |
 | Named registers       | Not implemented (`"a`, etc.)           | Supported                     |
 | Macros                | Not implemented (`q`, `@`)             | Supported                     |
 | Search                | Not implemented (`/`, `?`, `n`, `N`)   | Supported                     |
@@ -219,7 +239,7 @@ These are **explicitly deferred** and not planned for this feature:
 - Ex command surface (`:s`, `:g`, `:r`, …)
 - Search mode (`/`, `?`, `n`, `N`)
 - Repeat (`.`)
-- General count prefixes beyond current linewise scope (`3dw`, `2j`, …)
+- Extended count prefix beyond currently supported motions (e.g. counted `gg`, `:`, global operator counts)
 - Redo (`<C-r>`) — no native redo primitive in the underlying readline editor;
   deferred until a suitable hook is available.
 - Window / tab / buffer management
