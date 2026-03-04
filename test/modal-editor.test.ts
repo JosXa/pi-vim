@@ -468,6 +468,151 @@ describe("J — join lines", () => {
 
     assert.equal(editor.getText(), "foo");
   });
+
+  it("J cursor lands at join point (space position)", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["J"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+  });
+
+  it("J cursor at join point when left has trailing space (no separator inserted)", () => {
+    const { editor } = createMultiLineEditor("foo \nbar");
+
+    sendKeys(editor, ["J"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 4 });
+  });
+
+  it("J does not write unnamed register", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    editor.setRegister("untouched");
+
+    sendKeys(editor, ["J"]);
+
+    assert.equal(editor.getRegister(), "untouched");
+  });
+
+  it("J does not write clipboard", () => {
+    const { editor, clipboardWrites } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["J"]);
+
+    assert.deepEqual(clipboardWrites, []);
+  });
+});
+
+describe("gJ — raw join lines", () => {
+  it("gJ joins without whitespace normalization", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["g", "J"]);
+
+    assert.equal(editor.getText(), "foobar");
+  });
+
+  it("gJ preserves right leading whitespace", () => {
+    const { editor } = createMultiLineEditor("foo\n  bar");
+
+    sendKeys(editor, ["g", "J"]);
+
+    assert.equal(editor.getText(), "foo  bar");
+  });
+
+  it("gJ on last line is a no-op", () => {
+    const { editor } = createEditorWithSpy("only line");
+
+    sendKeys(editor, ["g", "J"]);
+
+    assert.equal(editor.getText(), "only line");
+  });
+
+  it("gJ cursor lands at former newline boundary", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["g", "J"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+  });
+
+  it("gJ does not write unnamed register", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+    editor.setRegister("untouched");
+
+    sendKeys(editor, ["g", "J"]);
+
+    assert.equal(editor.getRegister(), "untouched");
+  });
+});
+
+describe("counted J/gJ", () => {
+  it("3J joins three lines (2 steps)", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["3", "J"]);
+
+    assert.equal(editor.getText(), "a b c\nd");
+  });
+
+  it("3gJ joins three lines without normalization", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc\nd");
+
+    sendKeys(editor, ["3", "g", "J"]);
+
+    assert.equal(editor.getText(), "abc\nd");
+  });
+
+  it("count exceeding EOF clamps to available lines", () => {
+    const { editor } = createMultiLineEditor("a\nb");
+
+    sendKeys(editor, ["9", "J"]);
+
+    assert.equal(editor.getText(), "a b");
+  });
+
+  it("1J is a no-op (0 steps per spec formula)", () => {
+    const { editor } = createMultiLineEditor("a\nb");
+
+    sendKeys(editor, ["1", "J"]);
+
+    assert.equal(editor.getText(), "a\nb");
+  });
+
+  it("3J cursor at LAST join point", () => {
+    const { editor } = createMultiLineEditor("aa\nbb\ncc");
+
+    sendKeys(editor, ["3", "J"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 5 });
+  });
+
+  it("{count}gJ works: 2gJ joins two lines", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+
+    sendKeys(editor, ["2", "g", "J"]);
+
+    assert.equal(editor.getText(), "ab\nc");
+  });
+});
+
+describe("gJ parse safety", () => {
+  it("g{count}J is a no-op (fail-closed)", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+
+    sendKeys(editor, ["g", "3", "J"]);
+
+    assert.equal(editor.getText(), "a\nb\nc");
+  });
+
+  it("g{count}J does not write register", () => {
+    const { editor } = createMultiLineEditor("a\nb\nc");
+    editor.setRegister("untouched");
+
+    sendKeys(editor, ["g", "3", "J"]);
+
+    assert.equal(editor.getRegister(), "untouched");
+  });
 });
 
 // ---------------------------------------------------------------------------

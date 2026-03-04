@@ -98,6 +98,7 @@ export class ModalEditor extends CustomEditor {
   private prefixCount: string = "";
   private operatorCount: string = "";
   private pendingG: boolean = false;
+  private pendingGCount: string = "";
   private lastCharMotion: LastCharMotion | null = null;
   private discardingBracketedPasteInNormalMode: boolean = false;
   private pendingEscWhileDiscardingBracketedPasteInNormalMode: boolean = false;
@@ -123,6 +124,7 @@ export class ModalEditor extends CustomEditor {
     this.prefixCount = "";
     this.operatorCount = "";
     this.pendingG = false;
+    this.pendingGCount = "";
   }
 
   private stripBracketedPasteInNormalMode(data: string): { filtered: string | null; stripped: boolean } {
@@ -276,6 +278,7 @@ export class ModalEditor extends CustomEditor {
       || this.prefixCount
       || this.operatorCount
       || this.pendingG
+      || this.pendingGCount
     ) {
       this.clearPendingState();
       return;
@@ -535,12 +538,30 @@ export class ModalEditor extends CustomEditor {
 
   private handleNormalMode(data: string): void {
     if (this.pendingG) {
-      this.pendingG = false;
-      if (data === "g") {
-        this.moveCursorToBufferStart();
+      if (this.isDigit(data)) {
+        this.pendingGCount += data;
         return;
       }
-      // Unsupported g-prefix command: discard prefix and keep processing input.
+
+      this.pendingG = false;
+      const hadGCount = this.pendingGCount.length > 0;
+      this.pendingGCount = "";
+
+      if (!hadGCount) {
+        if (data === "g") {
+          this.takeTotalCount(1);
+          this.moveCursorToBufferStart();
+          return;
+        }
+
+        if (data === "J") {
+          this.joinLines(false);
+          return;
+        }
+      }
+
+      this.clearPendingState();
+      return;
     }
 
     if (this.prefixCount.length > 0) {
@@ -556,6 +577,12 @@ export class ModalEditor extends CustomEditor {
 
       if (data === "c") {
         this.pendingOperator = "c";
+        return;
+      }
+
+      if (data === "g") {
+        this.pendingGCount = "";
+        this.pendingG = true;
         return;
       }
 
@@ -624,6 +651,7 @@ export class ModalEditor extends CustomEditor {
     }
 
     if (data === "g") {
+      this.pendingGCount = "";
       this.pendingG = true;
       return;
     }
@@ -1621,7 +1649,11 @@ export class ModalEditor extends CustomEditor {
       return ` NORMAL ${prefixCount}${this.pendingOperator}${operatorCount}_ `;
     }
     if (this.pendingMotion) return ` NORMAL ${this.pendingMotion}_ `;
-    if (this.pendingG) return " NORMAL g_ ";
+    if (this.pendingG) {
+      return this.pendingGCount
+        ? ` NORMAL g${this.pendingGCount}_ `
+        : " NORMAL g_ ";
+    }
 
     const count = `${prefixCount}${operatorCount}`;
     if (count) return ` NORMAL ${count}_ `;
