@@ -567,6 +567,7 @@ export class ModalEditor extends CustomEditor {
         || data === "C"
         || data === "p"
         || data === "P"
+        || data === "J"
       );
       const supportsCountedCharMotion = (
         CHAR_MOTION_KEYS.has(data)
@@ -614,6 +615,11 @@ export class ModalEditor extends CustomEditor {
       }
     } else if (this.isCountStarter(data)) {
       this.prefixCount = data;
+      return;
+    }
+
+    if (data === "J") {
+      this.joinLines(true);
       return;
     }
 
@@ -833,6 +839,50 @@ export class ModalEditor extends CustomEditor {
   private moveCursorToBufferEnd(): void {
     const lines = this.getLines();
     this.moveCursorToLineStart(Math.max(0, lines.length - 1));
+  }
+
+  private joinLines(normalize: boolean): void {
+    const count = this.takeTotalCount(2);
+    const steps = Math.max(0, count - 1);
+    if (steps === 0) return;
+
+    const editor = this as unknown as {
+      state?: { lines?: string[]; cursorLine?: number; cursorCol?: number };
+      preferredVisualCol?: number;
+      tui?: { requestRender?: () => void };
+    };
+
+    const state = editor.state;
+    if (!state || !Array.isArray(state.lines)) return;
+
+    const currentLine = state.cursorLine ?? 0;
+    let joinPoint = state.cursorCol ?? 0;
+
+    for (let i = 0; i < steps; i++) {
+      if (currentLine >= state.lines.length - 1) break;
+
+      const left = state.lines[currentLine]!;
+      const right = state.lines[currentLine + 1]!;
+      let joined: string;
+
+      if (normalize) {
+        const trimmedRight = right.trimStart();
+        const leftEndsWithSpace = left.length > 0 && /\s/.test(left[left.length - 1]!);
+        const needsSeparator = !leftEndsWithSpace && trimmedRight.length > 0;
+        joined = needsSeparator ? `${left} ${trimmedRight}` : left + trimmedRight;
+        joinPoint = left.length;
+      } else {
+        joined = left + right;
+        joinPoint = left.length;
+      }
+
+      state.lines.splice(currentLine, 2, joined);
+    }
+
+    state.cursorLine = currentLine;
+    state.cursorCol = joinPoint;
+    editor.preferredVisualCol = joinPoint;
+    editor.tui?.requestRender?.();
   }
 
   private isWordChar(ch: string): boolean {

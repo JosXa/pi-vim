@@ -428,6 +428,48 @@ describe("buffer motions — gg / G", () => {
   });
 });
 
+describe("J — join lines", () => {
+  it("J joins current line with next, inserts separator space", () => {
+    const { editor } = createMultiLineEditor("foo\nbar");
+
+    sendKeys(editor, ["J"]);
+
+    assert.equal(editor.getText(), "foo bar");
+  });
+
+  it("J on last line is a no-op", () => {
+    const { editor } = createEditorWithSpy("only line");
+
+    sendKeys(editor, ["J"]);
+
+    assert.equal(editor.getText(), "only line");
+  });
+
+  it("J preserves left trailing whitespace, no double space", () => {
+    const { editor } = createMultiLineEditor("foo  \nbar");
+
+    sendKeys(editor, ["J"]);
+
+    assert.equal(editor.getText(), "foo  bar");
+  });
+
+  it("J trims right leading whitespace", () => {
+    const { editor } = createMultiLineEditor("foo\n  bar");
+
+    sendKeys(editor, ["J"]);
+
+    assert.equal(editor.getText(), "foo bar");
+  });
+
+  it("J with empty right line: no trailing space", () => {
+    const { editor } = createMultiLineEditor("foo\n");
+
+    sendKeys(editor, ["J"]);
+
+    assert.equal(editor.getText(), "foo");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Change (c) operator — 6 motions, always enters insert mode
 // ---------------------------------------------------------------------------
