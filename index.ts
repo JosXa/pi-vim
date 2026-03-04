@@ -377,7 +377,8 @@ export class ModalEditor extends CustomEditor {
       return;
     }
 
-    const range = this.getWordObjectRange(this.pendingTextObject!);
+    const count = this.takeTotalCount(1);
+    const range = this.getWordObjectRange(this.pendingTextObject!, count);
     this.pendingTextObject = null;
     if (!range || !this.pendingOperator) {
       this.pendingOperator = null;
@@ -452,18 +453,24 @@ export class ModalEditor extends CustomEditor {
       return;
     }
 
-    if (this.prefixCount.length > 0 || this.operatorCount.length > 0) {
-      // Counted forms beyond dd, d{count}j/k, and d{count}{f/F/t/T} are out of scope.
+    const hasCount = this.prefixCount.length > 0 || this.operatorCount.length > 0;
+    const supportsCountedWordMotion = data === "w" || data === "e" || data === "b";
+    const supportsCountedTextObject = data === "i" || data === "a";
+
+    if (hasCount && !supportsCountedWordMotion && !supportsCountedTextObject) {
+      // Counted forms beyond dd, d{count}j/k, d{count}{f/F/t/T}, and
+      // d{count}{w/e/b}/{i/a}w are out of scope.
       this.cancelPendingOperator(data);
       return;
     }
 
-    if (data === "i" || data === "a") {
+    if (supportsCountedTextObject) {
       this.pendingTextObject = data;
       return;
     }
 
-    if (this.deleteWithMotion(data)) {
+    const motionCount = supportsCountedWordMotion ? this.takeTotalCount(1) : 1;
+    if (this.deleteWithMotion(data, motionCount)) {
       this.pendingOperator = null;
       return;
     }
@@ -553,8 +560,13 @@ export class ModalEditor extends CustomEditor {
         || data === ";"
         || data === ","
       );
+      const supportsCountedWordMotion = (
+        data === "w"
+        || data === "e"
+        || data === "b"
+      );
 
-      if (!supportsCountedStandaloneEdit && !supportsCountedCharMotion) {
+      if (!supportsCountedStandaloneEdit && !supportsCountedCharMotion && !supportsCountedWordMotion) {
         // Unsupported prefixed forms: drop count and keep processing this key.
         this.prefixCount = "";
         this.operatorCount = "";
@@ -622,9 +634,12 @@ export class ModalEditor extends CustomEditor {
       return;
     }
 
-    if (data === "w") return this.moveWord("forward", "start");
-    if (data === "b") return this.moveWord("backward", "start");
-    if (data === "e") return this.moveWord("forward", "end");
+    if (data === "w") {
+      const count = this.takeTotalCount(1);
+      return this.moveWord("forward", "start", count);
+    }
+    if (data === "b") return this.moveWord("backward", "start", this.takeTotalCount(1));
+    if (data === "e") return this.moveWord("forward", "end", this.takeTotalCount(1));
 
     if (Object.hasOwn(NORMAL_KEYS, data)) {
       return this.handleMappedKey(data);
@@ -808,74 +823,73 @@ export class ModalEditor extends CustomEditor {
     abs: number,
     direction: "forward" | "backward",
     target: "start" | "end",
+    count: number = 1,
   ): number {
     const len = text.length;
     if (len === 0) return 0;
 
+    const steps = Math.max(1, Math.min(MAX_COUNT, count));
     let i = Math.max(0, Math.min(abs, len));
 
-    if (direction === "forward") {
-      if (i >= len) return len;
+    for (let step = 0; step < steps; step++) {
+      let next = i;
 
-      if (target === "start") {
-        const startType = this.charType(text[i]);
-        if (startType !== "space") {
-          while (i < len && this.charType(text[i]) === startType) i++;
+      if (direction === "forward") {
+        if (next >= len) {
+          next = len;
+        } else if (target === "start") {
+          const startType = this.charType(text[next]);
+          if (startType !== "space") {
+            while (next < len && this.charType(text[next]) === startType) next++;
+          }
+          while (next < len && this.charType(text[next]) === "space") next++;
+        } else {
+          if (next < len - 1) next++;
+          while (next < len && this.charType(text[next]) === "space") next++;
+          if (next >= len) {
+            next = len;
+          } else {
+            const t = this.charType(text[next]);
+            while (next < len - 1 && this.charType(text[next + 1]) === t) next++;
+          }
         }
-        while (i < len && this.charType(text[i]) === "space") i++;
-        return i;
+      } else {
+        if (next >= len) next = len - 1;
+        if (next > 0) next--;
+        while (next > 0 && this.charType(text[next]) === "space") next--;
+        const t = this.charType(text[next]);
+        while (next > 0 && this.charType(text[next - 1]) === t) next--;
       }
 
-      if (i < len - 1) i++;
-      while (i < len && this.charType(text[i]) === "space") i++;
-      if (i >= len) return len;
-      const t = this.charType(text[i]);
-      while (i < len - 1 && this.charType(text[i + 1]) === t) i++;
-      return i;
+      if (next === i) break;
+      i = next;
     }
 
-    if (i >= len) i = len - 1;
-    if (i > 0) i--;
-    while (i > 0 && this.charType(text[i]) === "space") i--;
-    const t = this.charType(text[i]);
-    while (i > 0 && this.charType(text[i - 1]) === t) i--;
     return i;
   }
 
-  private tryFindWordTargetLineLocal(
+  private tryFindWordTargetInLine(
+    line: string,
+    col: number,
     direction: WordMotionDirection,
     target: WordMotionTarget,
     allowSameColumn: boolean = false,
   ): number | null {
-    const cursor = this.getCursor();
-    const lineIndex = cursor.line;
-    const col = cursor.col;
-    const lineSnapshot = this.getLines()[lineIndex] ?? "";
-
-    if (lineSnapshot.length === 0) return null;
-    if (col < 0 || col > lineSnapshot.length) return null;
+    if (line.length === 0) return null;
+    if (col < 0 || col > line.length) return null;
 
     if (direction === "forward") {
-      if (col >= lineSnapshot.length) return null;
+      if (col >= line.length) return null;
     } else {
       if (col <= 0) return null;
-      if (!/\S/.test(lineSnapshot.slice(0, col))) return null;
+      if (!/\S/.test(line.slice(0, col))) return null;
     }
 
-    const targetCol = this.wordBoundaryCache.tryFindTarget(
-      lineSnapshot,
-      col,
-      direction,
-      target,
-    );
+    const targetCol = this.wordBoundaryCache.tryFindTarget(line, col, direction, target);
     if (targetCol === null) return null;
 
-    const liveLine = this.getLines()[lineIndex] ?? "";
-    const liveCol = this.getCursor().col;
-    if (liveLine !== lineSnapshot || liveCol !== col) return null;
-
     if (direction === "forward") {
-      if (targetCol >= lineSnapshot.length) return null;
+      if (targetCol >= line.length) return null;
       if (allowSameColumn) {
         if (targetCol < col) return null;
       } else if (targetCol <= col) {
@@ -889,6 +903,32 @@ export class ModalEditor extends CustomEditor {
     } else if (targetCol >= col) {
       return null;
     }
+
+    return targetCol;
+  }
+
+  private tryFindWordTargetLineLocal(
+    direction: WordMotionDirection,
+    target: WordMotionTarget,
+    allowSameColumn: boolean = false,
+  ): number | null {
+    const cursor = this.getCursor();
+    const lineIndex = cursor.line;
+    const col = cursor.col;
+    const lineSnapshot = this.getLines()[lineIndex] ?? "";
+
+    const targetCol = this.tryFindWordTargetInLine(
+      lineSnapshot,
+      col,
+      direction,
+      target,
+      allowSameColumn,
+    );
+    if (targetCol === null) return null;
+
+    const liveLine = this.getLines()[lineIndex] ?? "";
+    const liveCol = this.getCursor().col;
+    if (liveLine !== lineSnapshot || liveCol !== col) return null;
 
     return targetCol;
   }
@@ -907,29 +947,61 @@ export class ModalEditor extends CustomEditor {
 
   private tryWordMotionLineLocalRange(
     motion: "w" | "e" | "b",
+    count: number = 1,
   ): { col: number; targetCol: number; inclusive: boolean } | null {
-    const col = this.getCursor().col;
+    const cursor = this.getCursor();
+    const lineIndex = cursor.line;
+    const col = cursor.col;
+    const lineSnapshot = this.getLines()[lineIndex] ?? "";
     const direction: WordMotionDirection = motion === "b" ? "backward" : "forward";
     const target: WordMotionTarget = motion === "e" ? "end" : "start";
-    const targetCol = this.tryFindWordTargetLineLocal(direction, target, motion === "e");
+    const steps = Math.max(1, Math.min(MAX_COUNT, count));
 
-    if (targetCol === null) return null;
+    let currentCol = col;
+    for (let step = 0; step < steps; step++) {
+      const nextCol = this.tryFindWordTargetInLine(
+        lineSnapshot,
+        currentCol,
+        direction,
+        target,
+        motion === "e",
+      );
+      if (nextCol === null) return null;
+      if (nextCol === currentCol && step < steps - 1) return null;
+      currentCol = nextCol;
+    }
+
+    const liveLine = this.getLines()[lineIndex] ?? "";
+    const liveCol = this.getCursor().col;
+    if (liveLine !== lineSnapshot || liveCol !== col) return null;
 
     return {
       col,
-      targetCol,
+      targetCol: currentCol,
       inclusive: motion === "e",
     };
   }
 
-  private moveWord(direction: "forward" | "backward", target: "start" | "end"): void {
-    if (this.tryMoveWordLineLocal(direction, target)) return;
+  private moveWord(
+    direction: "forward" | "backward",
+    target: "start" | "end",
+    count: number = 1,
+  ): void {
+    let remaining = Math.max(1, Math.min(MAX_COUNT, count));
 
-    const text = this.getText();
-    const currentAbs = this.getAbsoluteIndexFromCursor();
-    const targetAbs = this.findWordTargetInText(text, currentAbs, direction, target);
-    if (targetAbs !== currentAbs) {
-      this.moveCursorBy(targetAbs - currentAbs);
+    while (remaining > 0) {
+      if (this.tryMoveWordLineLocal(direction, target)) {
+        remaining--;
+        continue;
+      }
+
+      const text = this.getText();
+      const currentAbs = this.getAbsoluteIndexFromCursor();
+      const targetAbs = this.findWordTargetInText(text, currentAbs, direction, target, remaining);
+      if (targetAbs !== currentAbs) {
+        this.moveCursorBy(targetAbs - currentAbs);
+      }
+      return;
     }
   }
 
@@ -1076,9 +1148,8 @@ export class ModalEditor extends CustomEditor {
     this.yankLineRange(this.getCursor().line, this.getLines().length - 1);
   }
 
-  private deleteWithMotion(motion: string): boolean {
+  private deleteWithMotion(motion: string, count: number = 1): boolean {
     const cursor = this.getCursor();
-    const line = this.getLines()[cursor.line] ?? "";
     const col = cursor.col;
 
     if (motion === "$") {
@@ -1093,7 +1164,7 @@ export class ModalEditor extends CustomEditor {
     }
 
     if (motion === "w" || motion === "e" || motion === "b") {
-      const lineLocalRange = this.tryWordMotionLineLocalRange(motion);
+      const lineLocalRange = this.tryWordMotionLineLocalRange(motion, count);
       if (lineLocalRange) {
         this.deleteRange(
           lineLocalRange.col,
@@ -1110,6 +1181,7 @@ export class ModalEditor extends CustomEditor {
         currentAbs,
         motion === "b" ? "backward" : "forward",
         motion === "e" ? "end" : "start",
+        count,
       );
       this.deleteRangeByAbsolute(currentAbs, targetAbs, motion === "e");
       return true;
@@ -1289,15 +1361,19 @@ export class ModalEditor extends CustomEditor {
     }
   }
 
-  private getWordObjectRange(kind: "i" | "a"): { startAbs: number; endAbs: number } | null {
+  private getWordObjectRange(
+    kind: "i" | "a",
+    count: number = 1,
+  ): { startAbs: number; endAbs: number } | null {
     const lines = this.getLines();
     const cursor = this.getCursor();
     const line = lines[cursor.line] ?? "";
     if (!line) return null;
 
-    let col = Math.min(cursor.col, Math.max(0, line.length - 1));
-
+    const steps = Math.max(1, Math.min(MAX_COUNT, count));
     const hasWordChar = (idx: number) => idx >= 0 && idx < line.length && this.isWordChar(line[idx]!);
+
+    let col = Math.min(cursor.col, Math.max(0, line.length - 1));
 
     if (!hasWordChar(col)) {
       let right = col;
@@ -1318,17 +1394,28 @@ export class ModalEditor extends CustomEditor {
     let end = col + 1;
     while (end < line.length && hasWordChar(end)) end++;
 
+    let remaining = steps - 1;
+    while (remaining > 0) {
+      let nextWordStart = end;
+      while (nextWordStart < line.length && !hasWordChar(nextWordStart)) nextWordStart++;
+      if (nextWordStart >= line.length) break;
+
+      let nextWordEnd = nextWordStart + 1;
+      while (nextWordEnd < line.length && hasWordChar(nextWordEnd)) nextWordEnd++;
+
+      end = nextWordEnd;
+      remaining--;
+    }
+
     if (kind === "a") {
-      let aroundStart = start;
       let aroundEnd = end;
-
       while (aroundEnd < line.length && /\s/.test(line[aroundEnd]!)) aroundEnd++;
-      if (aroundEnd === end) {
-        while (aroundStart > 0 && /\s/.test(line[aroundStart - 1]!)) aroundStart--;
-      }
 
-      start = aroundStart;
-      end = aroundEnd;
+      if (aroundEnd > end) {
+        end = aroundEnd;
+      } else {
+        while (start > 0 && /\s/.test(line[start - 1]!)) start--;
+      }
     }
 
     return {

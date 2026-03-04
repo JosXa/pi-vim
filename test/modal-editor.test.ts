@@ -346,13 +346,13 @@ describe("linewise operators and counts", () => {
     assert.equal(editor.getRegister(), "b");
   });
 
-  it("counted unsupported delete motion d2w cancels instead of deleting", () => {
-    const { editor } = createEditorWithSpy("foo bar");
+  it("counted delete motion d2w deletes two words", () => {
+    const { editor } = createEditorWithSpy("foo bar baz");
 
-    sendKeys(editor, ["d", "2", "w", "x"]);
+    sendKeys(editor, ["d", "2", "w"]);
 
-    assert.equal(editor.getText(), "oo bar");
-    assert.equal(editor.getRegister(), "f");
+    assert.equal(editor.getText(), "baz");
+    assert.equal(editor.getRegister(), "foo bar ");
   });
 
   it("counted unsupported yank motion y2w cancels instead of yanking", () => {
@@ -707,6 +707,58 @@ describe("Universal Counts: Char Motions", () => {
     sendKeys(editor, ["f", "x", "2", ";"]);
 
     assert.deepEqual(editor.getCursor(), { line: 0, col: 5 });
+  });
+});
+
+describe("Universal Counts: Word Motions", () => {
+  it("3w moves to the start of qux (3 word-forward steps)", () => {
+    const { editor } = createEditorWithSpy("foo bar baz qux");
+
+    sendKeys(editor, ["3", "w"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 12 });
+  });
+
+  it("2b from baz moves to the start of foo", () => {
+    const { editor } = createEditorWithSpy("foo bar baz");
+
+    sendKeys(editor, ["w", "w", "2", "b"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("2e from start lands at end of bar", () => {
+    const { editor } = createEditorWithSpy("foo bar baz");
+
+    sendKeys(editor, ["2", "e"]);
+
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 6 });
+  });
+
+  it("d2w deletes foo bar and leaves baz", () => {
+    const { editor } = createEditorWithSpy("foo bar baz");
+
+    sendKeys(editor, ["d", "2", "w"]);
+
+    assert.equal(editor.getText(), "baz");
+  });
+
+  it("d2aw deletes two words from bar and leaves foo", () => {
+    const { editor } = createEditorWithSpy("foo bar baz");
+
+    sendKeys(editor, ["w", "d", "2", "a", "w"]);
+
+    assert.equal(editor.getText(), "foo");
+  });
+
+  it("maintains differential parity with count > 1 (3w matches three sequential w)", () => {
+    const { editor: e1 } = createEditorWithSpy("foo bar baz qux");
+    const { editor: e2 } = createEditorWithSpy("foo bar baz qux");
+
+    sendKeys(e1, ["3", "w"]);
+    sendKeys(e2, ["w", "w", "w"]);
+
+    assert.deepEqual(e1.getCursor(), e2.getCursor());
   });
 });
 
