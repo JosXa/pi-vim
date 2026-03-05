@@ -64,10 +64,17 @@ A `{count}` prefix can be prepended to any navigation key (max: `9999`).
 | `$`           | Line end                      |
 | `gg`          | Buffer start (line 1)         |
 | `G`           | Buffer end (last line)        |
-| `w`           | Next word start               |
-| `b`           | Previous word start           |
-| `e`           | Word end (inclusive)          |
-| `{count}w/b/e`| Move `{count}` words          |
+| `w`           | Next `word` start (keyword/punctuation aware) |
+| `b`           | Previous `word` start         |
+| `e`           | `word` end (inclusive)        |
+| `W`           | Next `WORD` start (whitespace-delimited token) |
+| `B`           | Previous `WORD` start         |
+| `E`           | `WORD` end (inclusive)        |
+| `{count}w/b/e`| Move `{count}` `word` motions |
+| `{count}W/B/E`| Move `{count}` `WORD` motions |
+
+`word` (`w/b/e`) splits punctuation from keyword chars. `WORD` (`W/B/E`)
+treats any non-whitespace run as one token (`foo-bar`, `path/to`, `x.y`).
 
 ---
 
@@ -101,10 +108,14 @@ word, char-find, and linewise motions. Maximum total count: `9999`.
 
 | Command           | Deletes                                                   |
 |-------------------|-----------------------------------------------------------|
-| `dw`              | Forward to next word start (exclusive, can cross lines)   |
-| `de`              | Forward to word end (inclusive, can cross lines)          |
-| `db`              | Backward to word start (exclusive, can cross lines)       |
-| `d{count}w/e/b`   | Forward/backward `{count}` words                          |
+| `dw`              | Forward to next `word` start (exclusive, can cross lines) |
+| `de`              | Forward to `word` end (inclusive, can cross lines)        |
+| `db`              | Backward to `word` start (exclusive, can cross lines)     |
+| `dW`              | Forward to next `WORD` start (exclusive, can cross lines) |
+| `dE`              | Forward to `WORD` end (inclusive, can cross lines)        |
+| `dB`              | Backward to `WORD` start (exclusive, can cross lines)     |
+| `d{count}w/e/b`   | Forward/backward `{count}` `word` motions                 |
+| `d{count}W/E/B`   | Forward/backward `{count}` `WORD` motions                 |
 | `d$`              | To end of line                                            |
 | `d0`              | To start of line                                          |
 | `dd`              | Current line (linewise)                                   |
@@ -127,13 +138,17 @@ Same motion and count set as `d`. Deletes text then enters Insert mode.
 
 | Command         | Action                             |
 |-----------------|------------------------------------|
-| `cw`            | Delete word + Insert               |
-| `c{count}w/e/b` | Delete `{count}` words + Insert    |
-| `ciw`           | Change inner word                  |
-| `caw`           | Change around word                 |
-| `cc`            | Delete line content + Insert       |
-| `c$`            | Delete to EOL + Insert             |
-| …               | All `d` motions apply              |
+| `cw`            | Change `word` + Insert                        |
+| `ce` / `cb`     | Change to `word` end / previous `word` start  |
+| `cW`            | Change `WORD` + Insert (`cW` on non-space behaves like `cE`) |
+| `cE` / `cB`     | Change to `WORD` end / previous `WORD` start  |
+| `c{count}w/e/b` | Change `{count}` `word` motions + Insert      |
+| `c{count}W/E/B` | Change `{count}` `WORD` motions + Insert      |
+| `ciw`           | Change inner word                             |
+| `caw`           | Change around word                            |
+| `cc`            | Delete line content + Insert                  |
+| `c$`            | Delete to EOL + Insert                        |
+| …               | All `d` motions apply                         |
 
 #### Single-key edits
 
@@ -161,14 +176,21 @@ Same motion set as `d`. Writes to register, **no text mutation**.
 | `y{count}j`  | Current line + `{count}` lines below (linewise) |
 | `y{count}k`  | Current line + `{count}` lines above (linewise) |
 | `yG`         | Current line to end of buffer (linewise)         |
-| `yw`         | Forward to next word start                        |
-| `ye`         | To word end (inclusive)                           |
-| `yb`         | Backward to word start                            |
+| `yw`         | Forward to next `word` start                      |
+| `ye`         | To `word` end (inclusive)                         |
+| `yb`         | Backward to `word` start                          |
+| `yW`         | Forward to next `WORD` start                      |
+| `yE`         | To `WORD` end (inclusive)                         |
+| `yB`         | Backward to `WORD` start                          |
 | `y$`         | To end of line                                    |
 | `y0`         | To start of line                                  |
 | `yf{c}`      | To and including `char`                           |
 | `yiw`        | Inner word                                        |
 | `yaw`        | Around word (includes spaces)                     |
+
+Counted yank caveat: counted `word`/`WORD` yank motions are intentionally not
+implemented (`y2w`, `2yw`, `y2W`, `2yW`, etc. cancel the pending operator).
+Linewise counted yank (`{count}yy`, `y{count}j/k`) remains supported.
 
 ---
 
@@ -213,7 +235,7 @@ Redo (`<C-r>`) is **not implemented** — see [Out of scope](#out-of-scope).
 | Area                  | This extension                         | Full Vim                      |
 |-----------------------|----------------------------------------|-------------------------------|
 | `$` motion            | Moves past last char (readline CTRL+E) | Moves to last char            |
-| `w` / `e` / `b`       | Cross-line for word motions            | Cross-line                    |
+| `w` / `e` / `b` + `W` / `E` / `B` | Cross-line for `word` + `WORD` motions | Cross-line                    |
 | `0` / `$` operators   | Exclusive of anchor col                | `0` inclusive of col 0        |
 | Undo depth            | Delegates to underlying readline undo  | Full per-change undo tree     |
 | Redo                  | Not implemented                        | `<C-r>`                       |
@@ -224,7 +246,7 @@ Redo (`<C-r>`) is **not implemented** — see [Out of scope](#out-of-scope).
 | Macros                | Not implemented (`q`, `@`)             | Supported                     |
 | Search                | Not implemented (`/`, `?`, `n`, `N`)   | Supported                     |
 | Ex commands           | Not implemented (`:s`, `:g`, etc.)     | Supported                     |
-| Multi-line operators  | Supports `d/y` with `w/e/b`, `j/k` counts, and `G`; not full Vim motion matrix | Rich cross-line semantics |
+| Multi-line operators  | Supports `d/c/y` with `w/e/b` and `W/E/B`, plus `j/k` counts and `G`; not full Vim motion matrix | Rich cross-line semantics |
 
 ---
 

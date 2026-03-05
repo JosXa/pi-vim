@@ -16,16 +16,19 @@
  * - D: delete to end of line
  * - S: substitute line (delete line content + insert mode)
  * - s: substitute char (delete char + insert mode)
- * - d{motion}: delete with motion (dw, db, de, d$, d0, dd, df/dt/dF/dT{char})
+ * - d{motion}: delete with motion (`w/b/e` + `W/B/E`, `$`, `0`, `dd`, `f/t/F/T{char}`)
+ * - c{motion}: change with same motion set as `d` (then enter insert mode)
+ * - y{motion}: yank with same motion set as `d` (no text mutation)
  * - f{char}: jump to next {char} on line
  * - F{char}: jump to previous {char} on line
  * - t{char}: jump to just before next {char} on line
  * - T{char}: jump to just after previous {char} on line
  * - ;: repeat last f/F/t/T motion (same direction)
  * - ,: repeat last f/F/t/T motion (reverse direction)
- * - w: move to start of next word
- * - b: move to start of previous word
- * - e: move to end of word
+ * - w/b/e: `word` motions (keyword/punctuation aware)
+ * - W/B/E: `WORD` motions (whitespace-delimited non-space runs)
+ * - `{count}` prefixes supported for navigation and `d/c` word/WORD motions
+ * - counted yank caveat: `y2w`, `2yw`, `y2W`, `2yW` cancel (linewise counts still supported)
  * - Shift+Alt+A: go to end of line (insert mode shortcut)
  * - Shift+Alt+I: go to start of line (insert mode shortcut)
  * - Alt+o: open new line below (insert mode shortcut)
