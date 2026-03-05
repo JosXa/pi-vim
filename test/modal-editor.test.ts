@@ -378,6 +378,15 @@ describe("linewise operators and counts", () => {
     assert.equal(editor.getRegister(), "foo-bar   baz ");
   });
 
+  it("counted prefix 2dW deletes two WORDs", () => {
+    const { editor } = createEditorWithSpy("foo-bar   baz qux");
+
+    sendKeys(editor, ["2", "d", "W"]);
+
+    assert.equal(editor.getText(), "qux");
+    assert.equal(editor.getRegister(), "foo-bar   baz ");
+  });
+
   it("counted change motion c2E works for WORD semantics", () => {
     const { editor } = createEditorWithSpy("foo-bar   baz qux");
 
@@ -392,6 +401,16 @@ describe("linewise operators and counts", () => {
     const { editor } = createEditorWithSpy("one two three");
 
     sendKeys(editor, ["W", "W", "c", "2", "B"]);
+
+    assert.equal(editor.getText(), "three");
+    assert.equal(editor.getRegister(), "one two ");
+    assert.equal(editor.getMode(), "insert");
+  });
+
+  it("counted prefix 2cB changes backward across two WORDs", () => {
+    const { editor } = createEditorWithSpy("one two three");
+
+    sendKeys(editor, ["W", "W", "2", "c", "B"]);
 
     assert.equal(editor.getText(), "three");
     assert.equal(editor.getRegister(), "one two ");
@@ -735,6 +754,16 @@ describe("change operator — WORD motions (cW / cE / cB)", () => {
 
     assert.equal(editor.getText(), "   bar");
     assert.equal(editor.getRegister(), "foo");
+    assert.equal(editor.getMode(), "insert");
+  });
+
+  it("cW from whitespace deletes only whitespace run", () => {
+    const { editor } = createEditorWithSpy("foo   bar");
+
+    sendKeys(editor, ["l", "l", "l", "c", "W"]);
+
+    assert.equal(editor.getText(), "foobar");
+    assert.equal(editor.getRegister(), "   ");
     assert.equal(editor.getMode(), "insert");
   });
 
