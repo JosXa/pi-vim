@@ -23,6 +23,87 @@ function getCharType(
   return CharType.Other;
 }
 
+function clampLineIndex(lines: readonly string[], lineIndex: number): number {
+  if (lines.length === 0) return 0;
+  if (!Number.isFinite(lineIndex)) return 0;
+  const normalized = Math.trunc(lineIndex);
+  return Math.max(0, Math.min(normalized, lines.length - 1));
+}
+
+/**
+ * True when line matches ^\s*$.
+ */
+export function isBlankLine(line: string | undefined): boolean {
+  if (line === undefined) return true;
+  return /^\s*$/.test(line);
+}
+
+/**
+ * Paragraph start: non-blank line at BOF or after a blank line.
+ */
+export function isParagraphStart(lines: readonly string[], lineIndex: number): boolean {
+  if (!Number.isInteger(lineIndex)) return false;
+  if (lineIndex < 0 || lineIndex >= lines.length) return false;
+  if (isBlankLine(lines[lineIndex])) return false;
+  if (lineIndex === 0) return true;
+  return isBlankLine(lines[lineIndex - 1]);
+}
+
+/**
+ * One step of } motion from current line index.
+ */
+export function findNextParagraphStart(lines: readonly string[], fromLine: number): number {
+  if (lines.length === 0) return 0;
+
+  const start = clampLineIndex(lines, fromLine) + 1;
+  for (let i = start; i < lines.length; i++) {
+    if (isParagraphStart(lines, i)) return i;
+  }
+
+  return lines.length - 1;
+}
+
+/**
+ * One step of { motion from current line index.
+ */
+export function findPrevParagraphStart(lines: readonly string[], fromLine: number): number {
+  if (lines.length === 0) return 0;
+
+  const start = clampLineIndex(lines, fromLine) - 1;
+  for (let i = start; i >= 0; i--) {
+    if (isParagraphStart(lines, i)) return i;
+  }
+
+  return 0;
+}
+
+/**
+ * Paragraph motion target for counted { / } semantics.
+ */
+export function findParagraphMotionTarget(
+  lines: readonly string[],
+  fromLine: number,
+  direction: "forward" | "backward",
+  count: number = 1,
+): number {
+  if (lines.length === 0) return 0;
+
+  const steps = Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+  let currentLine = clampLineIndex(lines, fromLine);
+
+  for (let i = 0; i < steps; i++) {
+    const nextLine =
+      direction === "forward"
+        ? findNextParagraphStart(lines, currentLine)
+        : findPrevParagraphStart(lines, currentLine);
+
+    if (nextLine === currentLine) break;
+    currentLine = nextLine;
+  }
+
+  return currentLine;
+}
+
 /**
  * Reverse a character motion direction (f ↔ F, t ↔ T).
  */

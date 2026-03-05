@@ -4,7 +4,15 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { findWordMotionTarget, findCharMotionTarget } from "../motions.js";
+import {
+  findWordMotionTarget,
+  findCharMotionTarget,
+  isBlankLine,
+  isParagraphStart,
+  findNextParagraphStart,
+  findPrevParagraphStart,
+  findParagraphMotionTarget,
+} from "../motions.js";
 import { WordBoundaryCache } from "../word-boundary-cache.js";
 
 function makeGeneratedLineFixtures(count: number): string[] {
@@ -260,6 +268,75 @@ describe("WordBoundaryCache differential", () => {
         }
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Paragraph scanner helpers
+// ---------------------------------------------------------------------------
+
+describe("paragraph scanner helpers", () => {
+  const lines = [
+    "alpha",
+    "alpha tail",
+    "",
+    "   ",
+    "beta",
+    "beta tail",
+    "",
+    "gamma",
+    "",
+    "   ",
+  ];
+
+  it("detects blank lines using ^\\s*$ semantics", () => {
+    assert.equal(isBlankLine(""), true);
+    assert.equal(isBlankLine("   \t"), true);
+    assert.equal(isBlankLine("  x  "), false);
+  });
+
+  it("detects paragraph starts: non-blank line at BOF or after blank", () => {
+    assert.equal(isParagraphStart(lines, 0), true);
+    assert.equal(isParagraphStart(lines, 1), false);
+    assert.equal(isParagraphStart(lines, 2), false);
+    assert.equal(isParagraphStart(lines, 4), true);
+    assert.equal(isParagraphStart(lines, 7), true);
+  });
+
+  it("scans next paragraph start from non-blank and blank-run positions", () => {
+    assert.equal(findNextParagraphStart(lines, 0), 4);
+    assert.equal(findNextParagraphStart(lines, 1), 4);
+    assert.equal(findNextParagraphStart(lines, 2), 4);
+    assert.equal(findNextParagraphStart(lines, 3), 4);
+  });
+
+  it("scans previous paragraph start from non-blank and blank-run positions", () => {
+    assert.equal(findPrevParagraphStart(lines, 5), 4);
+    assert.equal(findPrevParagraphStart(lines, 4), 0);
+    assert.equal(findPrevParagraphStart(lines, 6), 4);
+    assert.equal(findPrevParagraphStart(lines, 8), 7);
+  });
+
+  it("clamps to EOF/BOF when no paragraph start exists in direction", () => {
+    assert.equal(findNextParagraphStart(lines, 7), 9);
+    assert.equal(findNextParagraphStart(lines, 9), 9);
+    assert.equal(findPrevParagraphStart(lines, 0), 0);
+
+    const leadingBlankLines = ["", "  ", "alpha"];
+    assert.equal(findPrevParagraphStart(leadingBlankLines, 2), 0);
+  });
+
+  it("supports counted traversal and clamps after exhausting paragraph starts", () => {
+    assert.equal(findParagraphMotionTarget(lines, 0, "forward", 1), 4);
+    assert.equal(findParagraphMotionTarget(lines, 0, "forward", 2), 7);
+    assert.equal(findParagraphMotionTarget(lines, 0, "forward", 3), 9);
+
+    assert.equal(findParagraphMotionTarget(lines, 7, "backward", 1), 4);
+    assert.equal(findParagraphMotionTarget(lines, 7, "backward", 2), 0);
+    assert.equal(findParagraphMotionTarget(lines, 7, "backward", 3), 0);
+
+    assert.equal(findParagraphMotionTarget(lines, 3, "forward", 2), 7);
+    assert.equal(findParagraphMotionTarget(lines, 6, "backward", 2), 0);
   });
 });
 
