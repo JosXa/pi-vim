@@ -506,6 +506,24 @@ describe("buffer motions — gg / G", () => {
     assert.equal(editor.getText(), "oo\nbar");
     assert.equal(editor.getRegister(), "f");
   });
+
+  it("{count}gg moves to target line (1-indexed)", () => {
+    const { editor } = createMultiLineEditor("aa\nbb\ncc\ndd");
+
+    sendKeys(editor, ["G", "2", "g", "g", "x"]);
+
+    assert.equal(editor.getText(), "aa\nb\ncc\ndd");
+    assert.equal(editor.getRegister(), "b");
+  });
+
+  it("{count}G moves to target line (1-indexed)", () => {
+    const { editor } = createMultiLineEditor("aa\nbb\ncc\ndd");
+
+    sendKeys(editor, ["3", "G", "x"]);
+
+    assert.equal(editor.getText(), "aa\nbb\nc\ndd");
+    assert.equal(editor.getRegister(), "c");
+  });
 });
 
 describe("paragraph motions — { / }", () => {

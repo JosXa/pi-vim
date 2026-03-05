@@ -63,7 +63,9 @@ A `{count}` prefix can be prepended to any navigation key (max: `9999`).
 | `0`           | Line start                    |
 | `$`           | Line end                      |
 | `gg`          | Buffer start (line 1)         |
+| `{count}gg`   | Go to line `{count}` (1-indexed, clamped) |
 | `G`           | Buffer end (last line)        |
+| `{count}G`    | Go to line `{count}` (1-indexed, clamped) |
 | `w`           | Next `word` start (keyword/punctuation aware) |
 | `b`           | Previous `word` start         |
 | `e`           | `word` end (inclusive)        |
@@ -274,7 +276,7 @@ These are **explicitly deferred** and not planned for this feature:
 - Ex command surface (`:s`, `:g`, `:r`, …)
 - Search mode (`/`, `?`, `n`, `N`)
 - Repeat (`.`)
-- Extended count prefix beyond currently supported motions (e.g. counted `gg`, `:`, global operator counts)
+- Extended count prefix beyond currently supported motions (e.g. `:`, global operator counts)
 - Redo (`<C-r>`) — no native redo primitive in the underlying readline editor;
   deferred until a suitable hook is available.
 - Window / tab / buffer management

@@ -573,8 +573,8 @@ export class ModalEditor extends CustomEditor {
 
       if (!hadGCount) {
         if (data === "g") {
-          this.takeTotalCount(1);
-          this.moveCursorToBufferStart();
+          const count = this.takeTotalCount(1);
+          this.moveCursorToLineStart(count - 1);
           return;
         }
 
@@ -607,6 +607,12 @@ export class ModalEditor extends CustomEditor {
       if (data === "g") {
         this.pendingGCount = "";
         this.pendingG = true;
+        return;
+      }
+
+      if (data === "G") {
+        const count = this.takeTotalCount(1);
+        this.moveCursorToLineStart(count - 1);
         return;
       }
 
