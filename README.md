@@ -72,9 +72,22 @@ A `{count}` prefix can be prepended to any navigation key (max: `9999`).
 | `E`           | `WORD` end (inclusive)        |
 | `{count}w/b/e`| Move `{count}` `word` motions |
 | `{count}W/B/E`| Move `{count}` `WORD` motions |
+| `}`           | Move to next paragraph start (line start col `0`) |
+| `{`           | Move to previous paragraph start (line start col `0`) |
+| `{count}}`    | Repeat `}` `{count}` times |
+| `{count}{`    | Repeat `{` `{count}` times |
 
 `word` (`w/b/e`) splits punctuation from keyword chars. `WORD` (`W/B/E`)
 treats any non-whitespace run as one token (`foo-bar`, `path/to`, `x.y`).
+
+Paragraph boundary definition (this extension wave):
+- blank line: matches `^\s*$`
+- paragraph start: non-blank line at BOF, or non-blank line immediately after a blank line
+
+Standalone `{` / `}` motions are navigation-only (no text/register mutation).
+Counted forms (`{count}{`, `{count}}`) step paragraph-by-paragraph.
+If no further paragraph boundary exists, motions clamp at BOF/EOF.
+Operator forms with braces (`d{`, `d}`, `c{`, `c}`, `y{`, `y}`) are out of scope for this wave.
 
 ---
 

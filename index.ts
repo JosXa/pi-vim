@@ -27,7 +27,9 @@
  * - ,: repeat last f/F/t/T motion (reverse direction)
  * - w/b/e: `word` motions (keyword/punctuation aware)
  * - W/B/E: `WORD` motions (whitespace-delimited non-space runs)
- * - `{count}` prefixes supported for navigation and `d/c` word/WORD motions
+ * - {/}: paragraph motions to previous/next paragraph start (line start col 0)
+ * - `{count}` prefixes supported for navigation, paragraph motions, and `d/c` word/WORD motions
+ * - operator forms with braces (`d{`, `d}`, `c{`, `c}`, `y{`, `y}`) are out of scope
  * - counted yank caveat: `y2w`, `2yw`, `y2W`, `2yW` cancel (linewise counts still supported)
  * - Shift+Alt+A: go to end of line (insert mode shortcut)
  * - Shift+Alt+I: go to start of line (insert mode shortcut)
