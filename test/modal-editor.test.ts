@@ -2191,6 +2191,150 @@ describe("regression — delete handler recursion", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Underscore (_) motion — first non-whitespace character
+// ---------------------------------------------------------------------------
+
+describe("underscore motion — _ (first non-whitespace)", () => {
+  it("_ moves to first non-whitespace char on indented line", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    // cursor starts at col 0 after createEditorWithSpy
+    sendKeys(editor, ["_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+  });
+
+  it("_ moves to first non-whitespace char with tabs", () => {
+    const { editor } = createEditorWithSpy("\t\thello");
+    sendKeys(editor, ["_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 2 });
+  });
+
+  it("_ moves to first non-whitespace char with mixed tabs and spaces", () => {
+    const { editor } = createEditorWithSpy("\t hello");
+    sendKeys(editor, ["_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 2 });
+  });
+
+  it("_ on line with no leading whitespace stays at col 0", () => {
+    const { editor } = createEditorWithSpy("hello");
+    sendKeys(editor, ["_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("_ from mid-line moves back to first non-whitespace", () => {
+    const { editor } = createEditorWithSpy("   hello world");
+    sendKeys(editor, ["w", "w"]); // move into "world"
+    sendKeys(editor, ["_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+  });
+
+  it("_ on blank line moves to col 0", () => {
+    const { editor } = createEditorWithSpy("   ");
+    sendKeys(editor, ["_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  });
+
+  it("_ does not mutate text", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    const before = editor.getText();
+    sendKeys(editor, ["_"]);
+    assert.equal(editor.getText(), before);
+  });
+
+  it("_ stays in normal mode", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    sendKeys(editor, ["_"]);
+    assert.equal(editor.getMode(), "normal");
+  });
+
+  it("_ does not write register or clipboard", () => {
+    const { editor, clipboardWrites } = createEditorWithSpy("   hello");
+    editor.setRegister("untouched");
+    sendKeys(editor, ["_"]);
+    assert.equal(editor.getRegister(), "untouched");
+    assert.deepEqual(clipboardWrites, []);
+  });
+});
+
+describe("counted underscore motion — {count}_", () => {
+  it("2_ moves down one line then to first non-whitespace", () => {
+    const { editor } = createMultiLineEditor("foo\n   bar\nbaz");
+    sendKeys(editor, ["2", "_"]);
+    assert.deepEqual(editor.getCursor(), { line: 1, col: 3 });
+  });
+
+  it("3_ moves down two lines then to first non-whitespace", () => {
+    const { editor } = createMultiLineEditor("foo\nbar\n\t\tbaz\nqux");
+    sendKeys(editor, ["3", "_"]);
+    assert.deepEqual(editor.getCursor(), { line: 2, col: 2 });
+  });
+
+  it("1_ is same as plain _ (no line movement)", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    sendKeys(editor, ["1", "_"]);
+    assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+  });
+
+  it("counted _ clamps at last line", () => {
+    const { editor } = createMultiLineEditor("foo\n   bar");
+    sendKeys(editor, ["9", "_"]);
+    // Should land on last line (line 1), first non-ws col 3
+    assert.deepEqual(editor.getCursor(), { line: 1, col: 3 });
+  });
+});
+
+describe("operator + underscore — d_ / c_ / y_", () => {
+  it("d_ from mid-line deletes back to first non-whitespace", () => {
+    const { editor } = createEditorWithSpy("   hello world");
+    // move to "world" (col 9)
+    sendKeys(editor, ["w", "w"]);
+    sendKeys(editor, ["d", "_"]);
+    assert.equal(editor.getText(), "   world");
+    assert.equal(editor.getRegister(), "hello ");
+  });
+
+  it("d_ from first non-whitespace is a no-op (same column)", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    sendKeys(editor, ["_"]); // move to col 3 first
+    sendKeys(editor, ["d", "_"]);
+    assert.equal(editor.getText(), "   hello");
+  });
+
+  it("d_ from col 0 on indented line deletes leading whitespace", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    // cursor at col 0
+    sendKeys(editor, ["d", "_"]);
+    assert.equal(editor.getText(), "hello");
+    assert.equal(editor.getRegister(), "   ");
+  });
+
+  it("c_ deletes to first non-whitespace and enters insert mode", () => {
+    const { editor } = createEditorWithSpy("   hello world");
+    sendKeys(editor, ["w", "w"]); // move to "world"
+    sendKeys(editor, ["c", "_"]);
+    assert.equal(editor.getText(), "   world");
+    assert.equal(editor.getRegister(), "hello ");
+    assert.equal(editor.getMode(), "insert");
+  });
+
+  it("y_ yanks from cursor to first non-whitespace without mutation", () => {
+    const { editor } = createEditorWithSpy("   hello world");
+    const before = editor.getText();
+    sendKeys(editor, ["w", "w"]); // move to "world"
+    sendKeys(editor, ["y", "_"]);
+    assert.equal(editor.getRegister(), "hello ");
+    assert.equal(editor.getText(), before);
+  });
+
+  it("y_ from col 0 yanks leading whitespace", () => {
+    const { editor } = createEditorWithSpy("   hello");
+    const before = editor.getText();
+    sendKeys(editor, ["y", "_"]);
+    assert.equal(editor.getRegister(), "   ");
+    assert.equal(editor.getText(), before);
+  });
+});
+
 describe("additional count combinations", () => {
   it("d2k deletes current line and two above", () => {
     const { editor } = createMultiLineEditor("a\nb\nc\nd\ne");
