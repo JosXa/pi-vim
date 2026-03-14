@@ -13,6 +13,7 @@
  * - hjkl: navigation in normal mode
  * - 0/$: line start/end
  * - ^: first non-whitespace char of line
+ * - _: first non-whitespace character (with count: down count-1 lines first)
  * - x: delete char under cursor
  * - D: delete to end of line
  * - S: substitute line (delete line content + insert mode)
@@ -646,6 +647,7 @@ export class ModalEditor extends CustomEditor {
         || data === "B"
       );
       const supportsCountedParagraphMotion = data === "{" || data === "}";
+      const supportsCountedUnderscore = data === "_";
       const supportsCountedNav = (
         data === "h"
         || data === "j"
@@ -685,6 +687,7 @@ export class ModalEditor extends CustomEditor {
         && !supportsCountedCharMotion
         && !supportsCountedWordMotion
         && !supportsCountedParagraphMotion
+        && !supportsCountedUnderscore
       ) {
         // Unsupported prefixed forms: drop count and keep processing this key.
         this.prefixCount = "";
@@ -756,6 +759,11 @@ export class ModalEditor extends CustomEditor {
 
     if (data === "u") {
       super.handleInput(CTRL_UNDERSCORE); // ctrl+_ — readline undo
+      return;
+    }
+
+    if (data === "_") {
+      this.moveToFirstNonWhitespace(this.takeTotalCount(1));
       return;
     }
 
@@ -1247,6 +1255,41 @@ export class ModalEditor extends CustomEditor {
     this.clipboardFn(text);
   }
 
+  /**
+   * Return the column of the first non-whitespace character on the line,
+   * or 0 if the line is blank / empty.
+   */
+  private firstNonWhitespaceCol(line: string): number {
+    const match = line.search(/[^ \t]/);
+    return match === -1 ? 0 : match;
+  }
+
+  /**
+   * `_` motion: move cursor to the first non-whitespace character.
+   * With a count, move down (count-1) lines first.
+   */
+  private moveToFirstNonWhitespace(count: number = 1): void {
+    const lineDelta = Math.max(0, count - 1);
+
+    // Move down if count > 1
+    if (lineDelta > 0) {
+      const lines = this.getLines();
+      const cursorLine = this.getCursor().line;
+      const safeCount = Math.min(lineDelta, lines.length - 1 - cursorLine);
+      for (let i = 0; i < safeCount; i++) {
+        super.handleInput(ESC_DOWN);
+      }
+    }
+
+    // Now move to first non-whitespace on the target line
+    const line = this.getLines()[this.getCursor().line] ?? "";
+    const col = this.getCursor().col;
+    const targetCol = this.firstNonWhitespaceCol(line);
+    if (targetCol !== col) {
+      this.moveCursorBy(targetCol - col);
+    }
+  }
+
   private getCurrentLineAndCol(): { line: string; col: number } {
     const line = this.getLines()[this.getCursor().line] ?? "";
     const col = this.getCursor().col;
@@ -1410,6 +1453,13 @@ export class ModalEditor extends CustomEditor {
       return true;
     }
 
+    if (motion === "_") {
+      const line = this.getLines()[cursor.line] ?? "";
+      const targetCol = this.firstNonWhitespaceCol(line);
+      this.deleteRange(col, targetCol, false);
+      return true;
+    }
+
     const wordMotion = this.resolveWordMotion(motion);
     if (wordMotion) {
       const lineLocalRange = this.tryWordMotionLineLocalRange(
@@ -1535,6 +1585,12 @@ export class ModalEditor extends CustomEditor {
 
     if (motion === "^") {
       this.yankRange(col, findFirstNonWhitespaceColumn(line), false);
+      return true;
+    }
+
+    if (motion === "_") {
+      const targetCol = this.firstNonWhitespaceCol(line);
+      this.yankRange(col, targetCol, false);
       return true;
     }
 
