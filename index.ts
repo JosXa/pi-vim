@@ -3,7 +3,7 @@
  *
  * Usage: pi --extension ./index.ts
  *
- * - Escape: insert → normal mode (in normal mode, aborts agent)
+ * - Escape / ctrl+[: insert → normal mode (in normal mode, aborts agent)
  * - i: normal → insert mode (at cursor)
  * - a: insert after cursor
  * - A: insert at end of line
@@ -134,6 +134,10 @@ export class ModalEditor extends CustomEditor {
     this.pendingGCount = "";
   }
 
+  private isEscapeLikeInput(data: string): boolean {
+    return matchesKey(data, "escape") || matchesKey(data, "ctrl+[");
+  }
+
   private stripBracketedPasteInNormalMode(data: string): { filtered: string | null; stripped: boolean } {
     let chunk = data;
     let stripped = false;
@@ -172,7 +176,7 @@ export class ModalEditor extends CustomEditor {
   handleInput(data: string): void {
     if (this.mode !== "insert") {
       if (this.discardingBracketedPasteInNormalMode) {
-        if (data === "\x1b") {
+        if (this.isEscapeLikeInput(data)) {
           if (this.pendingEscWhileDiscardingBracketedPasteInNormalMode) {
             this.pendingEscWhileDiscardingBracketedPasteInNormalMode = false;
             this.discardingBracketedPasteInNormalMode = false;
@@ -206,7 +210,7 @@ export class ModalEditor extends CustomEditor {
       data = filtered;
     }
 
-    if (matchesKey(data, "escape")) {
+    if (this.isEscapeLikeInput(data)) {
       return this.handleEscape();
     }
 

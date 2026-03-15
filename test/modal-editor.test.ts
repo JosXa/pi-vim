@@ -126,6 +126,14 @@ describe("mode transitions", () => {
     assert.equal(editor.getMode(), "normal");
   });
 
+  it("kitty ctrl+[ enters normal mode like escape", () => {
+    const { editor } = createEditorWithSpy("hello");
+    sendKeys(editor, ["i"]);
+    assert.equal(editor.getMode(), "insert");
+    sendKeys(editor, ["\x1b[91;5u"]);
+    assert.equal(editor.getMode(), "normal");
+  });
+
   it("i enters insert mode from normal", () => {
     const { editor } = createEditorWithSpy("hello");
     sendKeys(editor, ["i"]);
@@ -136,6 +144,27 @@ describe("mode transitions", () => {
     const { editor } = createEditorWithSpy("hello");
     sendKeys(editor, ["\x1b"]);
     assert.equal(editor.getMode(), "normal");
+  });
+
+  it("kitty ctrl+[ in normal mode forwards escape upward", () => {
+    const { editor } = createEditorWithSpy("hello");
+
+    const customEditorProto = Object.getPrototypeOf(Object.getPrototypeOf(editor));
+    const originalHandleInput = customEditorProto.handleInput;
+    let forwardedEscapeCount = 0;
+
+    customEditorProto.handleInput = function (this: unknown, data: string): unknown {
+      if (data === "\x1b") forwardedEscapeCount++;
+      return originalHandleInput.call(this, data);
+    };
+
+    try {
+      sendKeys(editor, ["\x1b[91;5u"]);
+      assert.equal(editor.getMode(), "normal");
+      assert.equal(forwardedEscapeCount, 1);
+    } finally {
+      customEditorProto.handleInput = originalHandleInput;
+    }
   });
 
   it("a at EOL on non-last line appends on same line", () => {

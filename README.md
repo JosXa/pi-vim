@@ -80,8 +80,8 @@ ex-commands, etc.).
 
 | Key      | Action                                 |
 |----------|----------------------------------------|
-| `Esc`    | Insert → Normal mode                   |
-| `Esc`    | Normal mode → pass to Pi (abort agent) |
+| `Esc` / `Ctrl+[` | Insert → Normal mode                   |
+| `Esc` / `Ctrl+[` | Normal mode → pass to Pi (abort agent) |
 | `i`      | Normal → Insert at cursor              |
 | `a`      | Normal → Insert after cursor           |
 | `I`      | Normal → Insert at line start          |
