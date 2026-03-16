@@ -114,6 +114,7 @@ A `{count}` prefix can be prepended to any navigation key (max: `9999`).
 | `{count}j/k`  | Move down/up `{count}` lines (clamped to buffer size) |
 | `0`           | Line start                    |
 | `^`           | First non-whitespace char of line |
+| `_`           | First non-whitespace char; with `{count}`, move down `count - 1` lines first |
 | `$`           | Line end                      |
 | `gg`          | Buffer start (line 1)         |
 | `{count}gg`   | Go to line `{count}` (1-indexed, clamped) |
